@@ -81,6 +81,7 @@ class EngineState(Enum):
     STARTED = auto()
     OK = auto()
     THINKING = auto()
+    PONDERING = auto()
     ERROR = auto()
     READING_UCI = auto()
     READING_EVAL_STOCKFISH = auto()
@@ -429,7 +430,7 @@ class EngineRun(QtCore.QObject):
                                     pass
                             self.li_cache = []
 
-                    elif st == EngineState.THINKING:
+                    elif st in (EngineState.THINKING, EngineState.PONDERING):
                         if self.mrm is not None:
                             try:
                                 self.mrm.dispatch(line)
@@ -551,6 +552,16 @@ class EngineRun(QtCore.QObject):
         except:
             if __debug__:
                 Debug.prln(f"Error in stop():\n{traceback.format_exc()}", color="red")
+
+    def ponderhit(self):
+        """Send ponderhit command. Engine transitions from ponder to normal search."""
+        try:
+            if self.state == EngineState.PONDERING:
+                self.state = EngineState.THINKING
+                self._send_command("ponderhit")
+        except:
+            if __debug__:
+                Debug.prln(f"Error in ponderhit():\n{traceback.format_exc()}", color="red")
 
     def time_played(self):
         return (time.time() - self.play_time_begin) if self.play_time_begin else 0.0
@@ -745,6 +756,20 @@ class EngineRun(QtCore.QObject):
         self._send_command(f"position fen {fen}")
         self.is_white = " w" in fen
 
+    def set_game_position_ponder(self, game: Game.Game, ponder_move: str):
+        """Set position with ponder move appended for 'go ponder'."""
+        self.stop()
+        self.isready()
+        order = "startpos" if game.is_fen_initial() else f"fen {game.first_position.fen()}"
+        pv = game.pv()
+        if pv:
+            order += f" moves {pv} {ponder_move}"
+        else:
+            order += f" moves {ponder_move}"
+        # After ponder move (human's expected move), it's the engine's turn
+        self.is_white = not game.is_white()
+        self._send_command(f"position {order}")
+
     def play(self, run_engine_params: RunEngineParams):
 
         def send_go(args: str):
@@ -793,6 +818,50 @@ class EngineRun(QtCore.QObject):
             return
 
         send_go("infinite")
+
+    def play_ponder(self, run_engine_params: RunEngineParams):
+        """Start pondering. Similar to play() but sends 'go ponder ...' and sets PONDERING state.
+        The engine will not send bestmove until ponderhit or stop is sent."""
+
+        def send_go_ponder(args: str):
+            self.last_depth_emit = 0
+            self.last_time_depth_emit = 0
+
+            self.play_time_begin = time.time()
+            self.state = EngineState.PONDERING
+
+            if self.mode_timer_poll:
+                self._start_polling()
+
+            self._send_command(f"go ponder {args}")
+
+        self.mrm = EngineResponse.MultiEngineResponse(self.config.name, self.is_white)
+
+        # No timerstop during ponder - engine won't send bestmove until ponderhit/stop
+
+        if run_engine_params.fixed_depth > 0:
+            send_go_ponder(f"depth {run_engine_params.fixed_depth}")
+            return
+
+        if run_engine_params.fixed_nodes > 0:
+            send_go_ponder(f"nodes {run_engine_params.fixed_nodes}")
+            return
+
+        if run_engine_params.fixed_ms > 0:
+            if self.config.emulate_movetime:
+                send_go_ponder("infinite")
+                return
+            send_go_ponder(f"movetime {int(run_engine_params.fixed_ms)}")
+            return
+
+        if run_engine_params.timems_white > 0:
+            order = f"wtime {run_engine_params.timems_white} btime {run_engine_params.timems_black}"
+            if run_engine_params.inc_timems_move:
+                order += f" winc {run_engine_params.inc_timems_move} binc {run_engine_params.inc_timems_move}"
+            send_go_ponder(order)
+            return
+
+        send_go_ponder("infinite")
 
     def set_mrm_cached(self, mrm: EngineResponse.MultiEngineResponse):
         self.mrm = mrm

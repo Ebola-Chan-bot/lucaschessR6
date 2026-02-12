@@ -247,6 +247,13 @@ class WPlayAgainstEngine(LCDialog.LCDialog):
 
         ly.otro(ly_humanize)
 
+        self.chb_ponder = Controles.CHB(
+            self,
+            _("Ponder") + " - " + _("Engine thinks during your turn"),
+            False,
+        ).set_font(font)
+        ly.control(self.chb_ponder)
+
         self._new_tab(ly, _("Basic configuration"))
 
     def _init_tab_help(self):
@@ -1158,6 +1165,7 @@ class WPlayAgainstEngine(LCDialog.LCDialog):
         dr["ENGINE_UNLIMITED"] = self.cb_unlimited.valor()
 
         dic["LEVEL_HUMANIZE"] = self.cb_humanize.valor()
+        dic["PONDER"] = self.chb_ponder.valor()
         if Code.eboard:
             dic["ACTIVATE_EBOARD"] = self.chb_eboard.valor()
         # dic["ANALYSIS_BAR"] = self.chb_analysis_bar.valor()
@@ -1235,6 +1243,7 @@ class WPlayAgainstEngine(LCDialog.LCDialog):
         self.cb_unlimited.set_value(dr.get("ENGINE_UNLIMITED", 10))
 
         self.cb_humanize.set_value(dic.get("LEVEL_HUMANIZE", 0))
+        self.chb_ponder.set_value(dic.get("PONDER", False))
         if Code.eboard:
             self.chb_eboard.set_value(dic.get("ACTIVATE_EBOARD", False))
         # self.chb_analysis_bar.set_value(dic.get("ANALYSIS_BAR", False))

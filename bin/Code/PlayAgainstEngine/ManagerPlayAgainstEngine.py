@@ -117,6 +117,8 @@ class ManagerPlayAgainstEngine(Manager.Manager):
     last_time_show_arrows: Optional[float] = None
     rival_is_thinking: bool = False
     humanize: int = 0
+    ponder_enabled: bool = False
+    ponder_move: str = ""
     unlimited_minutes: int = 6
     is_human_side_white: bool
     opening_line: Optional[Dict[str, Any]] = None
@@ -408,6 +410,12 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.resign_limit = -99999  # never
         self.resign_limit = dic_var["RESIGN"]
         self.humanize = dic_var.get("LEVEL_HUMANIZE", 0)
+        self.ponder_enabled = dic_var.get("PONDER", False)
+        self.ponder_move = ""
+
+        # Enable UCI Ponder option if ponder is active
+        if self.ponder_enabled:
+            self.manager_rival.set_option("Ponder", "true")
 
     def pon_toolbar(self, tb_state: ToolbarState):
         self.tb_huella = Util.huella()
@@ -672,6 +680,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         if si_pregunta:
             if not QTMessages.pregunta(self.main_window, _("Restart the game?")):
                 return
+        self.stop_ponder()
         self.crash_adjourn_end()
         if self.timed:
             self.main_window.stop_clock()
@@ -797,11 +806,20 @@ class ManagerPlayAgainstEngine(Manager.Manager):
     def stop_engine(self):
         if not self.human_is_playing:
             if self.manager_rival is not None:
+                self.manager_rival.stop_ponder()
                 self.manager_rival.stop()
+
+    def stop_ponder(self):
+        """Stop any ongoing pondering and clear ponder state."""
+        self.ponder_move = ""
+        if self.manager_rival is not None:
+            self.manager_rival.stop_ponder()
 
     def finalizar(self):
         if self.state == ST_ENDGAME:
             return True
+
+        self.stop_ponder()
 
         def close_comun():
             if self.timed:
@@ -866,6 +884,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
     def takeback(self):
         if len(self.game) and self.in_end_of_line():
+            self.stop_ponder()
             if self.is_tutor_analysing:
                 self.is_tutor_analysing = False
                 if self.manager_tutor:
@@ -1225,6 +1244,19 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
         self.analyze_begin()
 
+        # Start pondering while human thinks
+        if self.ponder_enabled and self.ponder_move:
+            # Update time params for ponder search
+            if self.timed:
+                seconds_white = self.tc_white.pending_time
+                seconds_black = self.tc_black.pending_time
+                seconds_move = self.tc_white.seconds_per_move
+            else:
+                seconds_white = seconds_black = self.unlimited_minutes * 60
+                seconds_move = 0
+            self.manager_rival.run_engine_params.update_var_time(seconds_white, seconds_black, seconds_move)
+            self.manager_rival.start_ponder(self.game, self.ponder_move)
+
     def player_has_moved_dispatcher(self, from_sq: str, to_sq: str, promotion: str = ""):
         """Viene desde el board via MainWindow, es previo, ya que si está pendiente el análisis, sólo se indica que ha
         elegido una jugada"""
@@ -1499,6 +1531,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         # CACHE---------------------------------------------------------------------------------------------------------
         fen_ultimo = self.last_fen()
         if fen_ultimo in self.cache:
+            self.stop_ponder()
             move = self.cache[fen_ultimo]
             if self.board.last_position != move.position_before:
                 self.set_position(move.position_before)
@@ -1535,6 +1568,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
         # --------------------------------------------------------------------------------------------------------------
         if is_choosed:
+            self.stop_ponder()  # Stop any ongoing ponder since move is from book/opening
             rm_rival = EngineResponse.EngineResponse("Opening", self.is_engine_side_white)
             rm_rival.from_sq = from_sq
             rm_rival.to_sq = to_sq
@@ -1546,6 +1580,22 @@ class ManagerPlayAgainstEngine(Manager.Manager):
     def play_engine_rival(self):
         self.thinking(True)
         self.pon_toolbar(ToolbarState.ENGINE_PLAYING)
+
+        # Check for ponder hit: if engine was pondering and human played the expected move
+        if self.ponder_enabled and self.manager_rival.is_pondering and self.ponder_move:
+            last_move = self.game.last_jg()
+            if last_move:
+                human_move = last_move.movimiento()
+                if human_move == self.ponder_move:
+                    # PONDER HIT - engine already searched this position
+                    self.ponder_move = ""
+                    rm_rival = self.manager_rival.play_ponderhit(dispacher=self.dispatch_rival)
+                    if rm_rival is not None:
+                        self.rival_has_moved(rm_rival)
+                    return
+            # PONDER MISS - stop ponder and do normal search
+            self.manager_rival.stop_ponder()
+            self.ponder_move = ""
 
         if self.timed:
             seconds_white = self.tc_white.pending_time
@@ -1608,6 +1658,12 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             rm_rival.promotion,
         )
         self.rm_rival = rm_rival
+
+        # Extract ponder move from engine response if ponder is enabled
+        self.ponder_move = ""
+        if self.ponder_enabled and self.manager_rival.mrm:
+            self.ponder_move = self.manager_rival.mrm.ponder_move
+
         if ok:
             fen_ultimo = self.last_fen()
             move.set_time_ms(int(time_s * 1000))
@@ -1805,12 +1861,19 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                 r_p = 0
 
             dr["RESIGN"] = self.resign_limit
+            self.stop_ponder()
             self.manager_rival.close()
             self.manager_rival = self.procesador.create_manager_engine(
                 rival, r_t, r_p, r_n, self.nAjustarFuerza != ADJUST_BETTER
             )
 
             self.manager_rival.is_white = not is_white
+
+            # Update ponder settings for new engine
+            self.ponder_enabled = dic.get("PONDER", False)
+            if self.ponder_enabled:
+                self.manager_rival.check_engine()
+                self.manager_rival.set_option("Ponder", "true")
 
             # Update side and tc_player/tc_rival aliases BEFORE time control,
             # so that tc_player/tc_rival point to the correct color clocks.

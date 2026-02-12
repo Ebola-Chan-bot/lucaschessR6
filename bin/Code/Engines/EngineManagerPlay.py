@@ -67,6 +67,10 @@ class EngineManagerPlay(EngineManager.EngineManager):
         self.playbook_active: bool = False
         self.seconds_humanize: float = 0
 
+        # Ponder state
+        self.is_pondering: bool = False
+        self.ponder_move: str = ""
+
         # Ctrl engines Wicker is a change in engine options at the end of the game to engines of type Wicker.
         # Once this is done, it switches to None.
         self.wicker_ctrl: EnginesWicker.WickerCtrl | None = EnginesWicker.check_is_wicker(engine, self.engine_run)
@@ -256,6 +260,115 @@ class EngineManagerPlay(EngineManager.EngineManager):
         self.seconds_humanize = max(
             min(movetime_seconds * factor_humanize, 45), porc * random.randint(1000, 3000) / 100000
         )
+
+    def start_ponder(self, game: Game.Game, ponder_move: str) -> bool:
+        """Start pondering in the background. Non-blocking.
+        The engine will think about the position after the expected human move (ponder_move)."""
+        if not self.check_engine():
+            return False
+        self.is_pondering = True
+        self.ponder_move = ponder_move
+        self.engine_run.set_game_position_ponder(game, ponder_move)
+        self.engine_run.play_ponder(self.run_engine_params)
+        return True
+
+    def play_ponderhit(self, dispacher: Optional[Callable] = None):
+        """Ponderhit: human played the expected move. Send ponderhit and wait for engine result."""
+        if not self.is_pondering or self.engine_run is None:
+            return None
+
+        self.is_pondering = False
+        self._is_canceled = False
+
+        # If engine doesn't support ponder and already returned bestmove, use cached result
+        if self.engine_run.state == EngineRun.EngineState.OK:
+            if self.engine_run.mrm is None:
+                return None
+            self.mrm = self.engine_run.mrm.clone()
+            self.mrm.ordena()
+            return self.mrm.best_rm_ordered()
+
+        # For emulate_movetime engines, start the timer now
+        if self.engine_run.config.emulate_movetime and self.run_engine_params.fixed_ms > 0:
+            self.engine_run._timerstop_run(int(self.run_engine_params.fixed_ms + 100))
+
+        # Send ponderhit - engine transitions from ponder to normal search
+        self.engine_run.ponderhit()
+
+        with_timer = True
+        state = SimpleNamespace(
+            ini_time=time.time(), secs_humanize=0, with_timer=with_timer, found_bestmove=False
+        )
+
+        def check_state(bestmove):
+            def close():
+                if self.engine_run is not None:
+                    try:
+                        self.engine_run.bestmove_found.disconnect(check_state)
+                    except (RuntimeError, TypeError):
+                        pass
+                if state.with_timer and timer is not None:
+                    timer.stop()
+                loop.quit()
+
+            if self.engine_run is None:
+                self._is_canceled = True
+                close()
+                return
+
+            if dispacher and self.engine_run.mrm:
+                if not dispacher(rm=self.engine_run.mrm.best_rm_ordered()):
+                    self._is_canceled = True
+                    close()
+
+            if bestmove is not None:
+                state.found_bestmove = True
+
+            if state.found_bestmove:
+                close()
+
+        loop = QtCore.QEventLoop()
+        timer = None
+        try:
+            self.engine_run.bestmove_found.connect(check_state)
+
+            timer = QtCore.QTimer(loop)
+            timer.setInterval(self.ms_refresh)
+            timer.timeout.connect(lambda: check_state(None))
+            timer.start()
+
+            self.active_loop = loop
+            loop.exec()
+        except AttributeError:
+            pass
+        finally:
+            self.active_loop = None
+            try:
+                if self.engine_run is not None:
+                    self.engine_run.bestmove_found.disconnect(check_state)
+            except (RuntimeError, TypeError):
+                pass
+            if timer is not None:
+                timer.stop()
+
+        if self.engine_run is None or self._is_canceled or self.engine_run.mrm is None:
+            return None
+
+        self.mrm = self.engine_run.mrm.clone()
+        self.mrm.ordena()
+        return self.mrm.best_rm_ordered()
+
+    def stop_ponder(self):
+        """Stop pondering. Used on ponder miss, takeback, game end, etc."""
+        if self.is_pondering and self.engine_run:
+            self.is_pondering = False
+            self.ponder_move = ""
+            # Only send stop if engine is actually still pondering
+            if self.engine_run.state == EngineRun.EngineState.PONDERING:
+                self.engine_run.stop()
+            # The engine will emit bestmove in response to stop.
+            # It will be processed by the permanent bestmove_found handler in EngineManager
+            # but no QEventLoop is running, so the result is just stored and not acted upon.
 
     def play_nomodal(self, game: Optional[Game.Game]) -> bool:
         if not self.check_engine():

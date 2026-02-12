@@ -300,10 +300,13 @@ class MultiEngineResponse:
     game: "Game.Game"
     fen_base: str
 
+    ponder_move: str
+
     def __init__(self, name, is_white):
         self.name = name
         self.is_white = is_white
         self.li_rm = []
+        self.ponder_move = ""
 
         self.reset()
         self._init_time_working = time.time()
@@ -637,6 +640,11 @@ class MultiEngineResponse:
 
         else:
             rm.without_movements = True
+
+        if "ponder" in d_claves:
+            self.ponder_move = d_claves["ponder"].strip()
+        else:
+            self.ponder_move = ""
 
     @staticmethod
     def check_claves(mensaje, st_claves):

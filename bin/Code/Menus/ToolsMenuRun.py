@@ -275,3 +275,4 @@ class ToolsMenuRun:
 
     def openings_books(self):
         WBooks.registered_books(self.wparent)
+        self.wparent.pgn_information.w_book_moves.refresh_combo()

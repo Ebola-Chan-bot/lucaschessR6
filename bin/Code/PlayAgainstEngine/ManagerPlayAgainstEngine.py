@@ -570,6 +570,8 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             li_mas_opciones = []
             if self.human_is_playing or self.is_finished():
                 li_mas_opciones.append(("books", _("Consult a book"), Iconos.Libros()))
+            if len(self.game) > 0:
+                li_mas_opciones.append(("add_book", _("Add line to book"), Iconos.BinBook()))
             # li_mas_opciones.append((None, None, None))
             # li_mas_opciones.append(("start_position", _("Change the starting position"), Iconos.PGN()))
 
@@ -580,6 +582,8 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                 if li_movs and si_en_vivo:
                     from_sq, to_sq, promotion = li_movs[-1]
                     self.player_has_moved_dispatcher(from_sq, to_sq, promotion)
+            elif resp == "add_book":
+                self.add_line_to_book()
 
         elif key == TB_ADJOURN:
             self.adjourn()

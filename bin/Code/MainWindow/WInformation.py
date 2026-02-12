@@ -6,11 +6,15 @@ import Code
 from Code.Z import Variations
 from Code.Analysis import Analysis
 from Code.Base import Game, Position
+from Code.Books import Books
 from Code.Nags import Nags, WNags
 from Code.QT import (
     Colocacion,
+    Columnas,
     Controles,
+    Delegados,
     FormLayout,
+    Grid,
     Iconos,
     QTDialogs,
     QTMessages,
@@ -115,6 +119,9 @@ class Information(QtWidgets.QWidget):
         # Variations
         self.variantes = WVariations(self)
 
+        # Book moves
+        self.w_book_moves = WBookMoves(self)
+
         self.splitter = splitter = QtWidgets.QSplitter(self)
         splitter.setOrientation(QtCore.Qt.Orientation.Vertical)
         splitter.addWidget(self.gb_comments)
@@ -131,6 +138,7 @@ class Information(QtWidgets.QWidget):
         layout.control(self.lb_opening)
         layout.control(self.w_rating)
         layout.control(splitter)
+        layout.control(self.w_book_moves)
         layout.margen(1)
 
         self.setLayout(layout)
@@ -257,6 +265,7 @@ class Information(QtWidgets.QWidget):
             else:
                 self.comment.set_text("")
             self.variantes.set_move(move)
+            self.w_book_moves.refresh_book(move.position.fen())
 
         else:
             self.gb_comments.set_text(f"{_('Game')} - {_('Comments')}")
@@ -267,6 +276,11 @@ class Information(QtWidgets.QWidget):
                     self.lb_opening.set_text(opening)
                     self.lb_opening.set_foreground_background("#eeeeee", "#474d59")
                     self.lb_opening.show()
+
+            if game is not None:
+                self.w_book_moves.refresh_book(game.first_position.fen())
+            else:
+                self.w_book_moves.refresh_book(None)
 
     def keyPressEvent(self, event):
         pass  # Para que ESC no cierre el programa
@@ -314,6 +328,212 @@ class Information(QtWidgets.QWidget):
             self.show()
         else:
             self.hide()
+
+
+class WBookMoves(QtWidgets.QWidget):
+    def __init__(self, owner):
+        self.owner = owner
+        QtWidgets.QWidget.__init__(self, owner)
+
+        configuration = Code.configuration
+        self.with_figurines = configuration.x_pgn_withfigurines
+        self.li_moves = []
+        self.current_fen = None
+        self.book = None
+
+        # Book selector combo
+        self.list_books = Books.ListBooks()
+        li_books = [(b.name, b) for b in self.list_books.lista]
+        self.cb_books = Controles.CB(self, li_books, self.list_books.lista[0] if li_books else None)
+        self.cb_books.capture_changes(self.on_book_changed)
+
+        # Restore last selected book
+        dic_saved = configuration.read_variables("WBOOKMOVES_INFO")
+        if dic_saved:
+            saved_name = dic_saved.get("BOOK_NAME", "")
+            for b in self.list_books.lista:
+                if b.name == saved_name:
+                    self.cb_books.set_value(b)
+                    break
+
+        self._init_book()
+
+        # Grid
+        o_columns = Columnas.ListaColumnas()
+        delegado = Delegados.EtiquetaPOS(True, with_lines=False) if self.with_figurines else None
+        o_columns.nueva("MOVE", _("Move"), 80, align_center=True, edicion=delegado)
+        o_columns.nueva("PORC", "%", 50, align_center=True)
+        o_columns.nueva("WEIGHT", _("Weight"), 60, align_right=True)
+        self.grid = Grid.Grid(self, o_columns, complete_row_select=True, heigh_row=configuration.x_pgn_rowheight)
+        f = Controles.FontType(puntos=configuration.x_pgn_fontpoints)
+        self.grid.set_font(f)
+
+        # Layout
+        ly_top = Colocacion.H().control(self.cb_books).relleno()
+        layout = Colocacion.V().otro(ly_top).control(self.grid).margen(0)
+        self.setLayout(layout)
+
+    def refresh_combo(self):
+        """Re-read the registered books list and repopulate the combo box."""
+        old_name = self.book.name if self.book else None
+        self.list_books = Books.ListBooks()
+        li_books = [(b.name, b) for b in self.list_books.lista]
+        self.cb_books.rehacer(li_books, self.list_books.lista[0] if li_books else None)
+        if old_name:
+            for b in self.list_books.lista:
+                if b.name == old_name:
+                    self.cb_books.set_value(b)
+                    break
+        self._init_book()
+        self.refresh_book(self.current_fen)
+
+    def _init_book(self):
+        selected = self.cb_books.valor()
+        if selected and selected != self.book:
+            self.book = selected
+            self.book.polyglot()
+            # Close the persistent file handle so it doesn't lock the .bin file on Windows.
+            # alm_list_moves -> lista() opens/closes the file on each call independently.
+            if hasattr(self.book, "book") and hasattr(self.book.book, "close"):
+                self.book.book.close()
+            self._ensure_sorted()
+
+    def _ensure_sorted(self):
+        """Check whether the current book file is sorted; offer to sort/recreate if not."""
+        import os
+        from Code.Books import Polyglot
+
+        path = str(self.book.path)
+        if not os.path.isfile(path) or os.path.getsize(path) < 32:
+            return
+
+        ONE_GB = 1024 * 1024 * 1024
+        file_size = os.path.getsize(path)
+
+        if file_size > ONE_GB:
+            # A polyglot book > 1 GB is almost certainly corrupted.
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                _("Corrupted book"),
+                _(
+                    "The book file is larger than 1 GB and is very likely corrupted.\n"
+                    "Do you want to recreate it as an empty book?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                with open(path, "wb") as f:
+                    pass  # truncate to 0
+            return
+
+        if Polyglot.is_polyglot_sorted(path):
+            return
+
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            _("Sort book?"),
+            _(
+                "The book file is not sorted and cannot be searched efficiently.\n"
+                "Sort it now? This is a one-time operation."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            from Code.QT import QTMessages
+            me = QTMessages.one_moment_please(self, _("Sorting book..."))
+            try:
+                Polyglot.sort_polyglot_file(path)
+            finally:
+                me.final()
+
+    def on_book_changed(self):
+        self._init_book()
+        # Save selection
+        if self.book:
+            Code.configuration.write_variables("WBOOKMOVES_INFO", {"BOOK_NAME": self.book.name})
+        self.refresh_book(self.current_fen)
+
+    def refresh_book(self, fen):
+        self.current_fen = fen
+        if fen and self.book:
+            try:
+                self.li_moves = self.book.alm_list_moves(fen)
+            except Exception:
+                self.li_moves = []
+        else:
+            self.li_moves = []
+        self.grid.refresh()
+
+    def grid_num_datos(self, _grid):
+        return len(self.li_moves)
+
+    def grid_dato(self, _grid, row, obj_column):
+        alm = self.li_moves[row]
+        key = obj_column.key
+        if key == "MOVE":
+            if self.with_figurines:
+                is_white = True
+                if self.current_fen:
+                    is_white = " w " in self.current_fen
+                return alm.pgnRaw, is_white, None, None, None, None, False, True
+            else:
+                return alm.pgn
+        elif key == "PORC":
+            return alm.porc
+        elif key == "WEIGHT":
+            return "%d" % alm.weight
+        return None
+
+    def grid_doble_click(self, _grid, row, _obj_column):
+        if 0 <= row < len(self.li_moves):
+            alm = self.li_moves[row]
+            manager = self.owner.get_manager()
+            if hasattr(manager, "board"):
+                manager.board.put_arrow_sc(alm.from_sq, alm.to_sq)
+
+    def grid_right_button(self, _grid, row, _obj_column, _modif):
+        if row < 0 or row >= len(self.li_moves) or not self.book:
+            return
+
+        import FasterCode
+        from Code.Books import Polyglot
+        from Code.QT import QTDialogs, Iconos
+
+        alm = self.li_moves[row]
+        menu = QTDialogs.LCMenu(self)
+        menu.opcion("edit_weight", _("Edit weight"), Iconos.Modificar())
+        menu.separador()
+        menu.opcion("delete", _("Delete"), Iconos.Borrar())
+        resp = menu.lanza()
+        if not resp:
+            return
+
+        path = str(self.book.path)
+        fen = alm.fen
+        key = FasterCode.hash_polyglot8(fen)
+        FasterCode.set_fen(fen)
+        poly_move = FasterCode.string_movepolyglot(alm.pv)
+
+        if resp == "edit_weight":
+            from Code.QT import FormLayout
+            form = FormLayout.FormLayout(self, _("Edit weight"), Iconos.Modificar(), minimum_width=250)
+            form.separador()
+            form.spinbox(_("Weight"), 0, 65535, 60, alm.weight)
+            form.separador()
+            resultado = form.run()
+            if not resultado:
+                return
+            _accion, (new_weight,) = resultado
+            Polyglot.set_entry_weight(path, key, poly_move, new_weight)
+            self.refresh_book(self.current_fen)
+
+        elif resp == "delete":
+            from Code.QT import QTMessages
+            if QTMessages.pregunta(self, _("Are you sure?")):
+                Polyglot.delete_entry(path, key, poly_move)
+                self.refresh_book(self.current_fen)
 
 
 class WVariations(QtWidgets.QWidget):

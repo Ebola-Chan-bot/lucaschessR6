@@ -1162,6 +1162,239 @@ class Manager:
         else:
             return None
 
+    def add_line_to_book(self):
+        """Add the current game line to a polyglot opening book."""
+        import os
+        import struct
+
+        from Code.Books import Books
+        from Code.QT import FormLayout, SelectFiles
+
+        if len(self.game) == 0:
+            return
+
+        list_books = Books.ListBooks()
+        li_books = [(book.name, book) for book in list_books.lista]
+        if not li_books:
+            return
+
+        dic = self.configuration.read_variables("ADD_LINE_TO_BOOK")
+        default_weight_white = dic.get("WEIGHT_WHITE", dic.get("WEIGHT", 100))
+        default_weight_black = dic.get("WEIGHT_BLACK", dic.get("WEIGHT", 100))
+
+        form = FormLayout.FormLayout(self.main_window, _("Add line to book"), Iconos.Libros(), minimum_width=400)
+        form.separador()
+        li_options = li_books + [(_("Other") + "...", None)]
+        form.combobox(_("Book"), li_options, li_books[0][1])
+        form.separador()
+        form.spinbox(f'{_("Weight")} ({_("White")})', 1, 32767, 60, default_weight_white)
+        form.spinbox(f'{_("Weight")} ({_("Black")})', 1, 32767, 60, default_weight_black)
+        form.separador()
+
+        resultado = form.run()
+        if not resultado:
+            return
+        accion, resp = resultado
+        book, weight_white, weight_black = resp
+
+        dic["WEIGHT_WHITE"] = weight_white
+        dic["WEIGHT_BLACK"] = weight_black
+        self.configuration.write_variables("ADD_LINE_TO_BOOK", dic)
+
+        if book is None:
+            fbin = SelectFiles.leeFichero(
+                self.main_window, list_books.path, "bin", titulo=_("Polyglot book")
+            )
+            if not fbin:
+                return
+            book = Books.Book("P", os.path.basename(fbin)[:-4], fbin, False)
+            list_books.nuevo(book)
+
+        # Build the move list from the starting position to the current board position.
+        # This follows the variation_history path so only the current line is added.
+        li_moves_to_add = []
+        vh = self.board.variation_history  # e.g. None, "3", "3|0|2", ...
+        if vh is not None and "|" in vh:
+            # Currently inside a variation — walk the variation_history path
+            parts = [int(x) for x in vh.split("|")]
+            # parts: [main_move_idx, var_num, var_move_idx, var_num2, var_move_idx2, ...]
+            # First, add main-line moves 0..main_move_idx (exclusive of main_move_idx itself)
+            main_idx = parts[0]
+            for i in range(main_idx):
+                li_moves_to_add.append(self.game.move(i))
+
+            # Now walk into variations
+            current_move_obj = self.game.move(main_idx)
+            pos = 1  # position in parts
+            while pos + 1 < len(parts):
+                var_num = parts[pos]
+                var_move_idx = parts[pos + 1]
+                variation_game = current_move_obj.variations.li_variations[var_num]
+                for j in range(var_move_idx + 1):
+                    li_moves_to_add.append(variation_game.move(j))
+                if pos + 3 < len(parts) and var_move_idx < len(variation_game):
+                    current_move_obj = variation_game.move(var_move_idx)
+                pos += 2
+        else:
+            # Main line only — use moves up to current position
+            num_moves, nj, _row, _is_white = self.manager_navigation.current_move()
+            if nj < 0:
+                nj = num_moves - 1
+            for i in range(nj + 1):
+                li_moves_to_add.append(self.game.move(i))
+
+        if not li_moves_to_add:
+            return
+
+        new_entries = {}  # (key, poly_move) -> weight
+        for move in li_moves_to_add:
+            fen_before = move.position_before.fen()
+            mv = move.movimiento()
+            FasterCode.set_fen(fen_before)
+            poly_move = FasterCode.string_movepolyglot(mv)
+            is_white_move = " w " in fen_before
+            weight = weight_white if is_white_move else weight_black
+            key = FasterCode.hash_polyglot8(fen_before)
+            km = (key, poly_move)
+            new_entries[km] = new_entries.get(km, 0) + weight
+
+        path_str = str(book.path)
+        ENTRY_SIZE = 16
+        KEY_FMT = struct.Struct(">Q")
+        MOVE_FMT = struct.Struct(">H")
+        WEIGHT_FMT = struct.Struct(">H")
+        ENTRY_FMT = struct.Struct(">QHHHBB")
+
+        # Ensure the book is usable (sorted, not corrupted).
+        from Code.Books import Polyglot as _Polyglot
+        ONE_GB = 1024 * 1024 * 1024
+        if os.path.isfile(path_str) and os.path.getsize(path_str) >= 32:
+            if os.path.getsize(path_str) > ONE_GB:
+                # > 1 GB is almost certainly corrupted — recreate.
+                if QTMessages.pregunta(
+                    self.main_window,
+                    _("The book file is larger than 1 GB and is very likely corrupted.") + "\n" +
+                    _("Do you want to recreate it as an empty book?"),
+                ):
+                    with open(path_str, "wb") as f:
+                        pass
+                else:
+                    return
+            elif not _Polyglot.is_polyglot_sorted(path_str):
+                me = QTMessages.one_moment_please(self.main_window, _("Sorting book..."))
+                try:
+                    _Polyglot.sort_polyglot_file(path_str)
+                finally:
+                    me.final()
+
+        file_exists = os.path.isfile(path_str) and os.path.getsize(path_str) >= ENTRY_SIZE
+
+        if not file_exists:
+            # File doesn't exist or is empty - just write new entries sorted
+            sorted_entries = sorted(
+                ((k, m, w, 0, 0, 0) for (k, m), w in new_entries.items()),
+                key=lambda x: (x[0], -x[2]),
+            )
+            with open(path_str, "wb") as f:
+                for t in sorted_entries:
+                    f.write(ENTRY_FMT.pack(*t))
+        else:
+            file_size = os.path.getsize(path_str)
+            num_entries = file_size // ENTRY_SIZE
+
+            # Phase 1: Binary search + in-place weight update for existing entries
+            entries_to_insert = {}
+            with open(path_str, "r+b") as f:
+                for (key, poly_move), w in new_entries.items():
+                    found = False
+                    lo, hi = 0, num_entries - 1
+                    first_match = -1
+                    while lo <= hi:
+                        mid = (lo + hi) // 2
+                        f.seek(mid * ENTRY_SIZE)
+                        entry_key = KEY_FMT.unpack(f.read(8))[0]
+                        if entry_key < key:
+                            lo = mid + 1
+                        elif entry_key > key:
+                            hi = mid - 1
+                        else:
+                            first_match = mid
+                            hi = mid - 1
+
+                    if first_match >= 0:
+                        pos = first_match
+                        while pos < num_entries:
+                            f.seek(pos * ENTRY_SIZE)
+                            data = f.read(ENTRY_SIZE)
+                            if len(data) < ENTRY_SIZE:
+                                break
+                            ek = KEY_FMT.unpack(data[:8])[0]
+                            if ek != key:
+                                break
+                            em = MOVE_FMT.unpack(data[8:10])[0]
+                            if em == poly_move:
+                                ew = WEIGHT_FMT.unpack(data[10:12])[0]
+                                new_weight = min(ew + w, 32767)
+                                f.seek(pos * ENTRY_SIZE + 10)
+                                f.write(WEIGHT_FMT.pack(new_weight))
+                                found = True
+                                break
+                            pos += 1
+
+                    if not found:
+                        entries_to_insert[(key, poly_move)] = w
+
+            # Phase 2: Insert truly new entries via streaming merge (rare for large books)
+            if entries_to_insert:
+                insert_list = sorted(
+                    ((k, m, w) for (k, m), w in entries_to_insert.items()),
+                    key=lambda x: x[0],
+                )
+                # Find insertion byte offsets via binary search
+                insertion_points = []
+                with open(path_str, "rb") as f:
+                    for key, poly_move, w in insert_list:
+                        lo, hi = 0, num_entries
+                        while lo < hi:
+                            mid = (lo + hi) // 2
+                            f.seek(mid * ENTRY_SIZE)
+                            ek = KEY_FMT.unpack(f.read(8))[0]
+                            if ek < key:
+                                lo = mid + 1
+                            else:
+                                hi = mid
+                        packed = ENTRY_FMT.pack(key, poly_move, w, 0, 0, 0)
+                        insertion_points.append((lo * ENTRY_SIZE, packed))
+
+                # Stream copy old file with new entries inserted
+                temp_path = path_str + ".tmp"
+                CHUNK = 1024 * 1024
+                with open(path_str, "rb") as fin, open(temp_path, "wb") as fout:
+                    prev_offset = 0
+                    for byte_offset, entry_data in insertion_points:
+                        to_copy = byte_offset - prev_offset
+                        while to_copy > 0:
+                            chunk = fin.read(min(to_copy, CHUNK))
+                            if not chunk:
+                                break
+                            fout.write(chunk)
+                            to_copy -= len(chunk)
+                        fout.write(entry_data)
+                        prev_offset = byte_offset
+                    while True:
+                        chunk = fin.read(CHUNK)
+                        if not chunk:
+                            break
+                        fout.write(chunk)
+                os.replace(temp_path, path_str)
+
+        QTMessages.message_bold(
+            self.main_window,
+            f"{_('Saved')}\n{book.name}: {len(li_moves_to_add)} {_('Moves').lower()}",
+        )
+
+        self.put_view()
+
     def set_position(self, position, variation_history=None):
         self.board.set_position(position, variation_history=variation_history)
 
@@ -1394,7 +1627,11 @@ class Manager:
         if self.is_competitive:
             self.utilities(with_tree=False)
         else:
-            li_extra_options = (("books", _("Consult a book"), Iconos.Libros()),)
+            li_extra_options = [
+                ("books", _("Consult a book"), Iconos.Libros()),
+            ]
+            if len(self.game) > 0:
+                li_extra_options.append(("add_book", _("Add line to book"), Iconos.BinBook()))
 
             resp = self.utilities(li_extra_options, with_tree=True)
             if resp == "books":
@@ -1403,6 +1640,8 @@ class Manager:
                     for x in range(len(li_movs) - 1, -1, -1):
                         from_sq, to_sq, promotion = li_movs[x]
                         self.player_has_moved_dispatcher(from_sq, to_sq, promotion)
+            elif resp == "add_book":
+                self.add_line_to_book()
 
     def pgn_informacion_menu(self):
         menu = QTDialogs.LCMenu(self.main_window)

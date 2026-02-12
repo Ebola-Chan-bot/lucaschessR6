@@ -467,8 +467,10 @@ class ManagerSolo(Manager.Manager):
         mt = _X(_("Disable %1"), mt) if self.play_against_engine else _X(_("Enable %1"), mt)
         sep = (None, None, None, None)
 
-        li_extra_options = (
+        li_extra_options = [
             ("books", _("Consult a book"), Iconos.Libros()),
+            sep,
+            ("add_book", _("Add line to book"), Iconos.BinBook()),
             sep,
             (None, _("Change the starting position"), Iconos.Board()),
             sep,
@@ -489,7 +491,7 @@ class ManagerSolo(Manager.Manager):
             sep,
             ("engine", mt, Iconos.Engines()),
             sep,
-        )
+        ]
 
         resp = self.utilities(li_extra_options)
         if resp == "books":
@@ -498,6 +500,9 @@ class ManagerSolo(Manager.Manager):
                 for x in range(len(li_movs) - 1, -1, -1):
                     from_sq, to_sq, promotion = li_movs[x]
                     self.player_has_moved_dispatcher(from_sq, to_sq, promotion)
+
+        elif resp == "add_book":
+            self.add_line_to_book()
 
         elif resp == "initial":
             self.basic_initial_position()

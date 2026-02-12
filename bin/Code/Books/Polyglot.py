@@ -2,6 +2,7 @@
 # http://alpha.uhasselt.be/Research/Algebra/Toga
 
 import os
+import struct
 import sys
 
 import FasterCode
@@ -147,6 +148,225 @@ class Polyglot:
             li.sort(key=lambda x: x.weight, reverse=True)
 
         return li
+
+
+def _find_entry_offset(path, key, poly_move):
+    """Binary-search for entry with given key and move. Returns byte offset or -1."""
+    ENTRY_SIZE = 16
+    KEY_FMT = struct.Struct(">Q")
+    MOVE_FMT = struct.Struct(">H")
+    file_size = os.path.getsize(path)
+    num_entries = file_size // ENTRY_SIZE
+    if num_entries == 0:
+        return -1
+
+    with open(path, "rb") as f:
+        lo, hi = 0, num_entries - 1
+        first_match = -1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            f.seek(mid * ENTRY_SIZE)
+            ek = KEY_FMT.unpack(f.read(8))[0]
+            if ek < key:
+                lo = mid + 1
+            elif ek > key:
+                hi = mid - 1
+            else:
+                first_match = mid
+                hi = mid - 1
+
+        if first_match < 0:
+            return -1
+
+        pos = first_match
+        while pos < num_entries:
+            f.seek(pos * ENTRY_SIZE)
+            data = f.read(ENTRY_SIZE)
+            if len(data) < ENTRY_SIZE:
+                break
+            ek = KEY_FMT.unpack(data[:8])[0]
+            if ek != key:
+                break
+            em = MOVE_FMT.unpack(data[8:10])[0]
+            if em == poly_move:
+                return pos * ENTRY_SIZE
+            pos += 1
+    return -1
+
+
+def set_entry_weight(path, key, poly_move, new_weight):
+    """Set the weight of an existing entry in-place. Returns True on success."""
+    offset = _find_entry_offset(path, key, poly_move)
+    if offset < 0:
+        return False
+    WEIGHT_FMT = struct.Struct(">H")
+    with open(path, "r+b") as f:
+        f.seek(offset + 10)
+        f.write(WEIGHT_FMT.pack(min(max(new_weight, 0), 32767)))
+    return True
+
+
+def delete_entry(path, key, poly_move):
+    """Delete an entry by streaming the file without it. Returns True on success."""
+    offset = _find_entry_offset(path, key, poly_move)
+    if offset < 0:
+        return False
+    ENTRY_SIZE = 16
+    CHUNK = 1024 * 1024
+    temp_path = path + ".tmp"
+    file_size = os.path.getsize(path)
+    with open(path, "rb") as fin, open(temp_path, "wb") as fout:
+        # Copy everything before the entry
+        remaining = offset
+        while remaining > 0:
+            chunk = fin.read(min(remaining, CHUNK))
+            if not chunk:
+                break
+            fout.write(chunk)
+            remaining -= len(chunk)
+        # Skip the entry
+        fin.seek(offset + ENTRY_SIZE)
+        # Copy everything after
+        while True:
+            chunk = fin.read(CHUNK)
+            if not chunk:
+                break
+            fout.write(chunk)
+    os.replace(temp_path, path)
+    return True
+
+
+def is_polyglot_sorted(path, sample_size=1000):
+    """Quick check: read first *sample_size* entries and verify keys are non-decreasing."""
+    entry_size = 16
+    key_fmt = struct.Struct(">Q")
+    prev_key = 0
+    try:
+        with open(path, "rb") as f:
+            for _ in range(sample_size):
+                data = f.read(entry_size)
+                if len(data) < entry_size:
+                    break
+                key = key_fmt.unpack(data[:8])[0]
+                if key < prev_key:
+                    return False
+                prev_key = key
+    except OSError:
+        return True
+    return True
+
+
+def sort_polyglot_file(path):
+    """Sort a polyglot .bin book by key (big-endian uint64).
+
+    Uses numpy when available (fastest, ~1.6 GB RAM for 100 M entries),
+    otherwise falls back to an external merge-sort that needs far less memory.
+    Trailing bytes that don't form a complete 16-byte entry are dropped.
+    The file is replaced atomically via a temp file.
+    """
+    file_size = os.path.getsize(path)
+    num_entries = file_size // 16
+    if num_entries <= 1:
+        return
+
+    temp_path = path + ".sorted.tmp"
+    try:
+        _sort_with_numpy(path, temp_path, num_entries)
+    except Exception:
+        _sort_external(path, temp_path, num_entries)
+    os.replace(temp_path, path)
+
+
+def _sort_with_numpy(path, temp_path, num_entries):
+    import numpy as np
+
+    dt = np.dtype(
+        [
+            ("key", ">u8"),
+            ("move", ">u2"),
+            ("weight", ">u2"),
+            ("score", ">u2"),
+            ("depth", "u1"),
+            ("learn", "u1"),
+        ]
+    )
+    data = np.fromfile(path, dtype=dt, count=num_entries)
+    data.sort(order="key")
+    data.tofile(temp_path)
+
+
+def _sort_external(path, temp_path, num_entries):
+    """Fallback external merge-sort for systems without numpy."""
+    import heapq
+    import tempfile
+
+    ENTRY_SIZE = 16
+    CHUNK_ENTRIES = 2_000_000  # 32 MB of raw data per chunk
+
+    chunk_paths = []
+    td = tempfile.mkdtemp()
+    try:
+        # Phase 1 – create sorted chunks
+        with open(path, "rb") as f:
+            ci = 0
+            while True:
+                raw = f.read(CHUNK_ENTRIES * ENTRY_SIZE)
+                if not raw:
+                    break
+                usable = len(raw) - len(raw) % ENTRY_SIZE
+                if usable == 0:
+                    break
+                raw = raw[:usable]
+                mv = memoryview(raw)
+                entries = [bytes(mv[i : i + ENTRY_SIZE]) for i in range(0, usable, ENTRY_SIZE)]
+                entries.sort()
+                cp = os.path.join(td, f"c{ci:04d}.bin")
+                with open(cp, "wb") as cf:
+                    cf.write(b"".join(entries))
+                chunk_paths.append(cp)
+                ci += 1
+
+        # Phase 2 – k-way merge
+        class _ChunkIter:
+            """Buffered reader that yields 16-byte entries."""
+            BUF = 1_048_576  # 1 MB read buffer
+
+            def __init__(self, p):
+                self._f = open(p, "rb")
+                self._buf = b""
+                self._off = 0
+
+            def __del__(self):
+                self._f.close()
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self._off >= len(self._buf):
+                    self._buf = self._f.read(self.BUF)
+                    self._off = 0
+                    if not self._buf:
+                        raise StopIteration
+                e = self._buf[self._off : self._off + ENTRY_SIZE]
+                self._off += ENTRY_SIZE
+                if len(e) < ENTRY_SIZE:
+                    raise StopIteration
+                return e
+
+        with open(temp_path, "wb") as fout:
+            for entry in heapq.merge(*[_ChunkIter(cp) for cp in chunk_paths]):
+                fout.write(entry)
+    finally:
+        for cp in chunk_paths:
+            try:
+                os.remove(cp)
+            except OSError:
+                pass
+        try:
+            os.rmdir(td)
+        except OSError:
+            pass
 
 
 class Line:

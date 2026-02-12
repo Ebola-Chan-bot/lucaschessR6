@@ -78,7 +78,7 @@ class WBase(QtWidgets.QWidget):
     lb_clock_black: Controles.LB
     lb_rotulo1: Controles.LB
     lb_rotulo2: Controles.LB
-    lb_rotulo3: Controles.LB
+    lb_rotulo3: QtWidgets.QTextBrowser
     lb_clock_black: Controles.LB
     lb_clock_black: Controles.LB
     pgn: Grid.Grid
@@ -378,8 +378,13 @@ class WBase(QtWidgets.QWidget):
         f = Controles.FontType(puntos=configuration.x_sizefont_infolabels)
         self.lb_rotulo1 = Controles.LB(self).set_wrap().set_font(f)
         self.lb_rotulo2 = Controles.LB(self).set_wrap().set_font(f)
-        self.lb_rotulo3 = Controles.LB(self).set_wrap().set_font(f)
+        self.lb_rotulo3 = QtWidgets.QTextBrowser(self)
+        self.lb_rotulo3.setFont(f)
+        self.lb_rotulo3.setReadOnly(True)
+        self.lb_rotulo3.setOpenLinks(False)
         self.lb_rotulo3.setStyleSheet("*{ border: 1px solid darkgray }")
+        self.lb_rotulo3.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.lb_rotulo3.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         # Rotulo de mensajes de trabajo con un cancelar
         self.wmessage = WMessage(self)
@@ -423,7 +428,6 @@ class WBase(QtWidgets.QWidget):
         )
 
         ly_abajo = Colocacion.V()
-        ly_abajo.setSizeConstraint(ly_abajo.SizeConstraint.SetFixedSize)
         ly_abajo.otro(ly_capturas)
         ly_abajo.control(self.bt_active_tutor)
         ly_abajo.control(self.lb_rotulo1).control(self.lb_rotulo2).control(self.lb_rotulo3).control(self.wmessage)
@@ -852,11 +856,11 @@ class WBase(QtWidgets.QWidget):
         return self.lb_rotulo2
 
     def set_hight_label3(self, px):
-        self.lb_rotulo3.fixed_height(px)
+        self.lb_rotulo3.setMinimumHeight(px)
 
     def set_label3(self, label):
         if label is not None:
-            self.lb_rotulo3.set_text(label)
+            self.lb_rotulo3.setHtml(label)
             self.lb_rotulo3.show()
         else:
             self.lb_rotulo3.hide()
@@ -864,7 +868,11 @@ class WBase(QtWidgets.QWidget):
 
     def get_labels(self):
         def get(lb):
-            return lb.texto() if lb.isVisible() else None
+            if not lb.isVisible():
+                return None
+            if isinstance(lb, QtWidgets.QTextBrowser):
+                return lb.toHtml()
+            return lb.texto()
 
         return get(self.lb_rotulo1), get(self.lb_rotulo2), get(self.lb_rotulo3)
 

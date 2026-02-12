@@ -57,7 +57,10 @@ class ManagerPerson(ManagerPlayAgainstEngine.ManagerPlayAgainstEngine):
             self.remove_hints(remove_back=False)
         if self.play_while_win:
             self.is_tutor_enabled = True
-        self.put_pieces_bottom(self.is_human_side_white)
+        if "WHITEBOTTOM" in dic_var:
+            self.put_pieces_bottom(dic_var["WHITEBOTTOM"])
+        else:
+            self.put_pieces_bottom(self.is_human_side_white)
 
         self.show_basic_label()
         self.set_label2("")

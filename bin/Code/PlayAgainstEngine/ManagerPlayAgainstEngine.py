@@ -214,7 +214,10 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             self.remove_hints(remove_back=False)
         if self.play_while_win:
             self.is_tutor_enabled = True
-        self.put_pieces_bottom(self.is_human_side_white)
+        if "WHITEBOTTOM" in dic_var:
+            self.put_pieces_bottom(dic_var["WHITEBOTTOM"])
+        else:
+            self.put_pieces_bottom(self.is_human_side_white)
 
         self.show_basic_label()
         self.set_label2("")
@@ -448,7 +451,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                     li.append(TB_STOP)
                 self.set_toolbar(li)
                 for key in li:
-                    self.main_window.enable_option_toolbar(key, key == TB_STOP)
+                    self.main_window.enable_option_toolbar(key, key in (TB_STOP, TB_UTILITIES))
 
             haz_engine(False)
 
@@ -692,6 +695,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         reinicio = self.reinicio.get("REINIT", 0) + 1
         self.game.set_tag("Reinit", str(reinicio))
         self.reinicio["REINIT"] = reinicio
+        self.reinicio["WHITEBOTTOM"] = self.board.is_white_bottom
 
         self.start(self.reinicio)
 

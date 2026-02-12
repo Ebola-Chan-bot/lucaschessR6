@@ -490,8 +490,13 @@ class WBookMoves(QtWidgets.QWidget):
         if 0 <= row < len(self.li_moves):
             alm = self.li_moves[row]
             manager = self.owner.get_manager()
-            if hasattr(manager, "board"):
-                manager.board.put_arrow_sc(alm.from_sq, alm.to_sq)
+            if manager and hasattr(manager, "player_has_moved_base"):
+                # Allow if human is playing (or no such attr, e.g. solo/analysis mode),
+                # AND board accepts input (pieces active or in variation navigation)
+                if getattr(manager, "human_is_playing", False) or not hasattr(manager, "human_is_playing"):
+                    board = getattr(manager, "board", None)
+                    if board and (board.pieces_are_active or board.variation_history is not None):
+                        manager.player_has_moved_base(alm.from_sq, alm.to_sq, alm.promotion)
 
     def grid_right_button(self, _grid, row, _obj_column, _modif):
         if row < 0 or row >= len(self.li_moves) or not self.book:

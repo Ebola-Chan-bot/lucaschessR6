@@ -1187,8 +1187,8 @@ class Manager:
         li_options = li_books + [(_("Other") + "...", None)]
         form.combobox(_("Book"), li_options, li_books[0][1])
         form.separador()
-        form.spinbox(f'{_("Weight")} ({_("White")})', 1, 32767, 60, default_weight_white)
-        form.spinbox(f'{_("Weight")} ({_("Black")})', 1, 32767, 60, default_weight_black)
+        form.spinbox(f'{_("Weight")} ({_("White")})', 0, 65535, 60, default_weight_white)
+        form.spinbox(f'{_("Weight")} ({_("Black")})', 0, 65535, 60, default_weight_black)
         form.separador()
 
         resultado = form.run()

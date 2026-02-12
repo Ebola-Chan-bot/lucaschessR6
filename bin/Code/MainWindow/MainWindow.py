@@ -431,6 +431,9 @@ class MainWindow(LCDialog.LCDialog):
     def hide_clock_black(self):
         self.base.hide_clock_black()
 
+    def set_clocks_visible(self, visible):
+        self.base.set_clocks_visible(visible)
+
     def change_player_labels(self, bl, ng):
         self.base.change_player_labels(bl, ng)
 

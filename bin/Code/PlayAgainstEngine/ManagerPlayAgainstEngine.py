@@ -1800,6 +1800,71 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
             self.manager_rival.is_white = not is_white
 
+            # Time control update
+            new_timed = dic.get("WITHTIME", False)
+            if new_timed:
+                new_max_seconds = dic["MINUTES"] * 60.0
+                new_seconds_per_move = dic["SECONDS"]
+                new_secs_extra = dic.get("MINEXTRA", 0) * 60.0
+                new_zeitnot = dic.get("ZEITNOT", 0)
+                new_disable_user_time = dic.get("DISABLEUSERTIME", False)
+
+                if new_disable_user_time:
+                    new_secs_extra = 3 * 60 * 60  # 3 horas
+
+                if self.timed:
+                    # Time control was already active: preserve remaining time, update increment and zeitnot
+                    # Adjust remaining time proportionally to the change in total time
+                    old_total = self.max_seconds
+                    if old_total > 0:
+                        for tc, is_player in ((self.tc_player, True), (self.tc_rival, False)):
+                            extra = new_secs_extra if is_player else 0
+                            old_base = old_total + (self.secs_extra if is_player else 0)
+                            new_base = new_max_seconds + extra
+                            if old_base > 0:
+                                ratio = new_base / old_base
+                            else:
+                                ratio = 1.0
+                            tc.pending_time = tc.pending_time * ratio
+                            tc.total_time = new_base
+                            tc.seconds_per_move = new_seconds_per_move if new_seconds_per_move else 0
+                            tc.zeitnot_marker = new_zeitnot if new_zeitnot else 0
+                            tc.show_clock = True
+                    else:
+                        self.tc_player.config_clock(new_max_seconds, new_seconds_per_move, new_zeitnot, new_secs_extra)
+                        self.tc_rival.config_clock(new_max_seconds, new_seconds_per_move, new_zeitnot, 0)
+                else:
+                    # Time control was NOT active: start fresh
+                    self.tc_player.config_clock(new_max_seconds, new_seconds_per_move, new_zeitnot, new_secs_extra)
+                    self.tc_rival.config_clock(new_max_seconds, new_seconds_per_move, new_zeitnot, 0)
+
+                self.timed = True
+                self.max_seconds = new_max_seconds
+                self.seconds_per_move = new_seconds_per_move
+                self.secs_extra = new_secs_extra
+                self.disable_user_time = new_disable_user_time
+
+                self.tc_white.set_displayed(True)
+                self.tc_black.set_displayed(True)
+                if new_disable_user_time:
+                    self.tc_player.set_displayed(False)
+
+                self.main_window.set_clocks_visible(True)
+                if new_disable_user_time:
+                    if self.is_human_side_white:
+                        self.main_window.hide_clock_white()
+                    else:
+                        self.main_window.hide_clock_black()
+
+            elif self.timed:
+                # User disabled time control mid-game
+                self.timed = False
+                self.tc_white.set_displayed(False)
+                self.tc_black.set_displayed(False)
+                self.main_window.set_clocks_visible(False)
+
+            self.show_clocks()
+
             rival = self.manager_rival.engine.name
             player = self.configuration.x_player
             bl, ng = player, rival
@@ -1813,6 +1878,10 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             if is_white != self.is_human_side_white:
                 self.is_human_side_white = is_white
                 self.is_engine_side_white = not is_white
+
+                # Update tc_player/tc_rival aliases after side swap
+                self.tc_player = self.tc_white if self.is_human_side_white else self.tc_black
+                self.tc_rival = self.tc_white if self.is_engine_side_white else self.tc_black
 
                 self.play_next_move()
 

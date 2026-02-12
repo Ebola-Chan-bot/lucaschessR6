@@ -1448,6 +1448,31 @@ class WCambioRival(QtWidgets.QDialog):
         )
         self.btAjustarRival.set_tooltip(_("Personalities"))
 
+        # Time control
+        self.lb_minutos = Controles.LB(self, f"{_('Total minutes')}:")
+        self.ed_minutos = Controles.ED(self).type_float(10.0).ancho_maximo(70)
+        self.ed_segundos, self.lb_segundos = QTMessages.spinbox_lb(
+            self, 6, -999, 999, max_width=50, etiqueta=_("Seconds added per move"),
+        )
+        self.edMinExtra, self.lbMinExtra = QTMessages.spinbox_lb(
+            self, 0, 0, 10000, max_width=50, etiqueta=_("Extra minutes for the player"),
+        )
+        self.chb_disable_usertime = Controles.CHB(self, _("Disable user time control"), False)
+        self.edZeitnot, self.lbZeitnot = QTMessages.spinbox_lb(
+            self, 0, -999, 999, max_width=50, etiqueta=_("Zeitnot: alarm sounds when remaining seconds"),
+        )
+        ly_tc1 = Colocacion.H()
+        ly_tc1.control(self.lb_minutos).control(self.ed_minutos).espacio(30)
+        ly_tc1.control(self.lb_segundos).control(self.ed_segundos).relleno()
+        ly_tc2 = Colocacion.H()
+        ly_tc2.control(self.lbMinExtra).control(self.edMinExtra).espacio(30)
+        ly_tc2.control(self.chb_disable_usertime).relleno()
+        ly_tc3 = Colocacion.H()
+        ly_tc3.control(self.lbZeitnot).control(self.edZeitnot).relleno()
+        ly_tc = Colocacion.V().otro(ly_tc1).otro(ly_tc2).otro(ly_tc3)
+        self.gb_time = Controles.GB(self, _("Activate the time control"), ly_tc)
+        self.gb_time.to_connect(self.test_time_visible)
+
         # Layout
         # Color
         hbox = Colocacion.H().relleno().control(self.rb_white).espacio(30).control(self.rb_black).relleno()
@@ -1477,6 +1502,7 @@ class WCambioRival(QtWidgets.QDialog):
 
         ly_resto = Colocacion.V()
         ly_resto.otro(h_ac).espacio(3)
+        ly_resto.control(self.gb_time).espacio(3)
         ly_resto.control(gb_r).espacio(1)
         ly_resto.margen(8)
 
@@ -1519,6 +1545,17 @@ class WCambioRival(QtWidgets.QDialog):
         if resp is None:
             self.cbAjustarRival.set_value(ADJUST_HIGH_LEVEL)
 
+    def test_time_visible(self):
+        checked = self.gb_time.isChecked()
+        for w in (
+            self.lb_minutos, self.ed_minutos,
+            self.lb_segundos, self.ed_segundos,
+            self.lbMinExtra, self.edMinExtra,
+            self.chb_disable_usertime,
+            self.lbZeitnot, self.edZeitnot,
+        ):
+            w.setVisible(checked)
+
     def change_fields(self, ed_data, valor):
         if valor:
             for field in (self.ed_time, self.ed_nodes, self.ed_depth):
@@ -1548,6 +1585,15 @@ class WCambioRival(QtWidgets.QDialog):
 
         dic["ADJUST"] = self.cbAjustarRival.valor()
 
+        # Time control
+        dic["WITHTIME"] = self.gb_time.isChecked()
+        if dic["WITHTIME"]:
+            dic["MINUTES"] = self.ed_minutos.text_to_float()
+            dic["SECONDS"] = self.ed_segundos.value()
+            dic["MINEXTRA"] = self.edMinExtra.value()
+            dic["DISABLEUSERTIME"] = self.chb_disable_usertime.valor()
+            dic["ZEITNOT"] = self.edZeitnot.value()
+
         self.accept()
 
     def restore_dic(self):
@@ -1566,6 +1612,17 @@ class WCambioRival(QtWidgets.QDialog):
         self.ed_depth.set_integer(dr.get("ENGINE_DEPTH", 0))
         self.ed_nodes.set_integer(dr.get("ENGINE_NODES", 0))
         self.cbAjustarRival.set_value(dic.get("ADJUST", ADJUST_BETTER))
+
+        # Time control
+        with_time = dic.get("WITHTIME", False)
+        self.gb_time.setChecked(with_time)
+        if with_time:
+            self.ed_minutos.set_float(dic.get("MINUTES", 10.0))
+            self.ed_segundos.setValue(dic.get("SECONDS", 6))
+            self.edMinExtra.setValue(dic.get("MINEXTRA", 0))
+            self.chb_disable_usertime.set_value(dic.get("DISABLEUSERTIME", False))
+            self.edZeitnot.setValue(dic.get("ZEITNOT", 0))
+        self.test_time_visible()
 
     def change_personalities(self):
         si_rehacer = self.personalidades.lanza_menu()

@@ -230,6 +230,7 @@ class Manager:
     def reset_shortcuts_mouse(self):
         self.atajosRatonDestino = None
         self.atajosRatonOrigen = None
+        self.board.clear_origin_highlight()
 
     @staticmethod
     def other_candidates(li_moves, position, li_c):
@@ -354,6 +355,9 @@ class Manager:
             self.reset_shortcuts_mouse()
 
         def show_candidates():
+            self.board.clear_origin_highlight()
+            if self.atajosRatonOrigen:
+                self.board.highlight_origin_square(self.atajosRatonOrigen)
             if self.configuration.x_show_candidates:
                 li_c = []
                 for xmov in li_moves:
@@ -363,7 +367,7 @@ class Manager:
                         li_c.append((h8, "C"))
                 if self.state != ST_PLAYING:
                     self.other_candidates(li_moves, position, li_c)
-                self.board.show_candidates(li_c)
+                self.board.show_candidates_persistent(li_c)
 
         if self.configuration.x_mouse_shortcuts is None:
             return

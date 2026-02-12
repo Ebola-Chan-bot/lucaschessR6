@@ -116,7 +116,9 @@ class Board(QtWidgets.QGraphicsView):
     mensajero: Any
     minimum_size: int
     nCoordenadas: int
+    origin_highlight_sc: Optional[BoardBoxes.MarcoSC]
     pendingRelease: list[Any] | None
+    persistent_candidates: list[Any]
     pieces: Any
     pieces_are_active: bool
     pressed_letter: Any
@@ -210,6 +212,8 @@ class Board(QtWidgets.QGraphicsView):
         self.dispatch_size = None  # configuration en vivo, dirige a la rutina de la main_window afectada
 
         self.pendingRelease = None
+        self.origin_highlight_sc = None
+        self.persistent_candidates = []
 
         self.siPermitidoResizeExterno = True
         self.mensajero: Optional[Callable] = None
@@ -1446,6 +1450,53 @@ class Board(QtWidgets.QGraphicsView):
             self.pendingRelease.append(svg)
         self.escena.update()
 
+    def show_candidates_persistent(self, li_c):
+        """Show candidate move indicators that persist across mouse release (for click-to-move)."""
+        if not li_c or not self.configuration.x_show_candidates:
+            return
+        self.check_leds()
+
+        dic_pos_cuadro = {"C": 0, "P+": 1, "Px": 1, "P#": 1, "R+": 2, "R#": 2, "Rx": 3}
+        for a1, tp in li_c:
+            reg_svg = BoardTypes.SVG()
+            reg_svg.a1h8 = a1 + a1
+            reg_svg.xml = self.dicXML[tp]
+            reg_svg.siMovible = False
+            reg_svg.posCuadro = dic_pos_cuadro[tp]
+            reg_svg.width_square = self.width_square
+            svg = BoardSVGs.SVGCandidate(self.escena, reg_svg, False)
+            self.persistent_candidates.append(svg)
+        self.escena.update()
+
+    def highlight_origin_square(self, a1h8):
+        """Show a persistent highlight on the origin square for click-to-move selection."""
+        self.clear_origin_highlight()
+        if a1h8:
+            bloque_marco = BoardTypes.Marco()
+            bloque_marco.a1h8 = a1h8 + a1h8
+            bloque_marco.color = 0xFF4882C4
+            bloque_marco.colorinterior = 0x404882C4
+            bloque_marco.grosor = 2
+            bloque_marco.redEsquina = 0
+            bloque_marco.tipo = 1
+            bloque_marco.opacity = 1.0
+            bloque_marco.width_square = self.width_square
+            bloque_marco.physical_pos.orden = ZVALUE_PIECE - 1
+            self.origin_highlight_sc = BoardBoxes.MarcoSC(self.escena, bloque_marco)
+            self.escena.update()
+
+    def clear_origin_highlight(self):
+        """Remove the origin square highlight and persistent candidate indicators."""
+        if self.origin_highlight_sc is not None:
+            self.escena.removeItem(self.origin_highlight_sc)
+            self.origin_highlight_sc = None
+        if self.persistent_candidates:
+            for item in self.persistent_candidates:
+                item.hide()
+                self.escena.removeItem(item)
+            self.persistent_candidates = []
+            self.escena.update()
+
     def mouseDoubleClickEvent(self, event):
         if item := self.itemAt(event.pos()):
             if item == self.arrow_sc:
@@ -1549,6 +1600,7 @@ class Board(QtWidgets.QGraphicsView):
 
     def set_position(self, position, remove_movables_now=True, variation_history=None):
         self.active_premove = False
+        self.clear_origin_highlight()
         if self.dirvisual:
             self.dirvisual.changed_position_before()
         elif self.dbVisual.save_always():

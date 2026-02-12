@@ -1254,6 +1254,8 @@ class Manager:
             poly_move = FasterCode.string_movepolyglot(mv)
             is_white_move = " w " in fen_before
             weight = weight_white if is_white_move else weight_black
+            if weight == 0:
+                continue
             key = FasterCode.hash_polyglot8(fen_before)
             km = (key, poly_move)
             new_entries[km] = new_entries.get(km, 0) + weight

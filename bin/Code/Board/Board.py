@@ -117,6 +117,7 @@ class Board(QtWidgets.QGraphicsView):
     minimum_size: int
     nCoordenadas: int
     origin_highlight_sc: Optional[BoardBoxes.MarcoSC]
+    destination_highlight_sc: Optional[BoardBoxes.MarcoSC]
     pendingRelease: list[Any] | None
     persistent_candidates: list[Any]
     pieces: Any
@@ -213,6 +214,7 @@ class Board(QtWidgets.QGraphicsView):
 
         self.pendingRelease = None
         self.origin_highlight_sc = None
+        self.destination_highlight_sc = None
         self.persistent_candidates = []
 
         self.siPermitidoResizeExterno = True
@@ -1470,7 +1472,9 @@ class Board(QtWidgets.QGraphicsView):
 
     def highlight_origin_square(self, a1h8):
         """Show a persistent highlight on the origin square for click-to-move selection."""
-        self.clear_origin_highlight()
+        if self.origin_highlight_sc is not None:
+            self.escena.removeItem(self.origin_highlight_sc)
+            self.origin_highlight_sc = None
         if a1h8:
             bloque_marco = BoardTypes.Marco()
             bloque_marco.a1h8 = a1h8 + a1h8
@@ -1485,11 +1489,33 @@ class Board(QtWidgets.QGraphicsView):
             self.origin_highlight_sc = BoardBoxes.MarcoSC(self.escena, bloque_marco)
             self.escena.update()
 
+    def highlight_destination_square(self, a1h8):
+        """Show a persistent highlight on the destination square for click-to-move selection."""
+        if self.destination_highlight_sc is not None:
+            self.escena.removeItem(self.destination_highlight_sc)
+            self.destination_highlight_sc = None
+        if a1h8:
+            bloque_marco = BoardTypes.Marco()
+            bloque_marco.a1h8 = a1h8 + a1h8
+            bloque_marco.color = 0xFFC44848
+            bloque_marco.colorinterior = 0x40C44848
+            bloque_marco.grosor = 2
+            bloque_marco.redEsquina = 0
+            bloque_marco.tipo = 1
+            bloque_marco.opacity = 1.0
+            bloque_marco.width_square = self.width_square
+            bloque_marco.physical_pos.orden = ZVALUE_PIECE - 1
+            self.destination_highlight_sc = BoardBoxes.MarcoSC(self.escena, bloque_marco)
+            self.escena.update()
+
     def clear_origin_highlight(self):
-        """Remove the origin square highlight and persistent candidate indicators."""
+        """Remove the origin/destination square highlights and persistent candidate indicators."""
         if self.origin_highlight_sc is not None:
             self.escena.removeItem(self.origin_highlight_sc)
             self.origin_highlight_sc = None
+        if self.destination_highlight_sc is not None:
+            self.escena.removeItem(self.destination_highlight_sc)
+            self.destination_highlight_sc = None
         if self.persistent_candidates:
             for item in self.persistent_candidates:
                 item.hide()

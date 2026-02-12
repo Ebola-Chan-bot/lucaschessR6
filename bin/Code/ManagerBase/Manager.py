@@ -358,13 +358,17 @@ class Manager:
             self.board.clear_origin_highlight()
             if self.atajosRatonOrigen:
                 self.board.highlight_origin_square(self.atajosRatonOrigen)
+            if self.atajosRatonDestino:
+                self.board.highlight_destination_square(self.atajosRatonDestino)
             if self.configuration.x_show_candidates:
                 li_c = []
                 for xmov in li_moves:
                     a1 = xmov.xfrom()
                     h8 = xmov.xto()
-                    if a1 == self.atajosRatonOrigen:
+                    if self.atajosRatonOrigen and a1 == self.atajosRatonOrigen:
                         li_c.append((h8, "C"))
+                    elif self.atajosRatonDestino and not self.atajosRatonOrigen and h8 == self.atajosRatonDestino:
+                        li_c.append((a1, "C"))
                 if self.state != ST_PLAYING:
                     self.other_candidates(li_moves, position, li_c)
                 self.board.show_candidates_persistent(li_c)
@@ -384,7 +388,6 @@ class Manager:
                     mueve()
                 else:
                     self.atajosRatonOrigen = None
-                    self.atajosRatonDestino = None
                     show_candidates()
             return
 

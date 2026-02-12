@@ -1812,7 +1812,26 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
             self.manager_rival.is_white = not is_white
 
-            # Time control update
+            # Update side and tc_player/tc_rival aliases BEFORE time control,
+            # so that tc_player/tc_rival point to the correct color clocks.
+            rival_name = self.manager_rival.engine.name
+            player = self.configuration.x_player
+            bl, ng = player, rival_name
+            if not is_white:
+                bl, ng = ng, bl
+            self.main_window.change_player_labels(bl, ng)
+
+            self.show_basic_label()
+
+            self.put_pieces_bottom(is_white)
+            side_changed = is_white != self.is_human_side_white
+            if side_changed:
+                self.is_human_side_white = is_white
+                self.is_engine_side_white = not is_white
+                self.tc_player = self.tc_white if self.is_human_side_white else self.tc_black
+                self.tc_rival = self.tc_white if self.is_engine_side_white else self.tc_black
+
+            # Time control update (tc_player/tc_rival are now correct)
             new_timed = dic.get("WITHTIME", False)
             if new_timed:
                 new_max_seconds = dic["MINUTES"] * 60.0
@@ -1829,9 +1848,9 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                     # Adjust remaining time proportionally to the change in total time
                     old_total = self.max_seconds
                     if old_total > 0:
-                        for tc, is_player in ((self.tc_player, True), (self.tc_rival, False)):
-                            extra = new_secs_extra if is_player else 0
-                            old_base = old_total + (self.secs_extra if is_player else 0)
+                        for tc, is_player_tc in ((self.tc_player, True), (self.tc_rival, False)):
+                            extra = new_secs_extra if is_player_tc else 0
+                            old_base = old_total + (self.secs_extra if is_player_tc else 0)
                             new_base = new_max_seconds + extra
                             if old_base > 0:
                                 ratio = new_base / old_base
@@ -1877,24 +1896,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
             self.show_clocks()
 
-            rival = self.manager_rival.engine.name
-            player = self.configuration.x_player
-            bl, ng = player, rival
-            if not is_white:
-                bl, ng = ng, bl
-            self.main_window.change_player_labels(bl, ng)
-
-            self.show_basic_label()
-
-            self.put_pieces_bottom(is_white)
-            if is_white != self.is_human_side_white:
-                self.is_human_side_white = is_white
-                self.is_engine_side_white = not is_white
-
-                # Update tc_player/tc_rival aliases after side swap
-                self.tc_player = self.tc_white if self.is_human_side_white else self.tc_black
-                self.tc_rival = self.tc_white if self.is_engine_side_white else self.tc_black
-
+            if side_changed:
                 self.play_next_move()
 
     def show_dispatch(self, tp: int, rm: EngineResponse.EngineResponse):

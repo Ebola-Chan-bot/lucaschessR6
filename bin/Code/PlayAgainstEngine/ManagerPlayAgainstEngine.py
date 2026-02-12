@@ -1944,6 +1944,18 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
             # Time control update (tc_player/tc_rival are now correct)
             new_timed = dic.get("WITHTIME", False)
+
+            # If time control settings changed, invalidate move cache because
+            # cached entries contain cacheTime snapshots from the old settings.
+            time_changed = (new_timed != self.timed
+                            or (new_timed and (
+                                dic["MINUTES"] * 60.0 != self.max_seconds
+                                or dic["SECONDS"] != self.seconds_per_move
+                                or dic.get("MINEXTRA", 0) * 60.0 != self.secs_extra
+                                or dic.get("DISABLEUSERTIME", False) != self.disable_user_time)))
+            if time_changed:
+                self.cache = {}
+
             if new_timed:
                 new_max_seconds = dic["MINUTES"] * 60.0
                 new_seconds_per_move = dic["SECONDS"]

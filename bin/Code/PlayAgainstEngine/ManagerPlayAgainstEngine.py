@@ -571,11 +571,16 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                 if len(self.game) > 0:
                     li_mas_opciones.append((None, None, None))
                     li_mas_opciones.append(("moverival", _("Change opponent move"), Iconos.TOLchange()))
+                li_mas_opciones.append((None, None, None))
+                ponder_label = (_("Disable") if self.ponder_enabled else _("Enable")) + ": " + _("Ponder")
+                li_mas_opciones.append(("ponder", ponder_label, Iconos.Kibitzer()))
             resp = self.configurar(li_mas_opciones, with_sounds=True)
             if resp == "rival":
                 self.change_rival()
             elif resp == "moverival":
                 self.change_last_move_engine()
+            elif resp == "ponder":
+                self.toggle_ponder()
 
         elif key == TB_UTILITIES:
             li_mas_opciones = []
@@ -814,6 +819,15 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.ponder_move = ""
         if self.manager_rival is not None:
             self.manager_rival.stop_ponder()
+
+    def toggle_ponder(self):
+        """Toggle ponder on/off mid-game."""
+        self.ponder_enabled = not self.ponder_enabled
+        if self.ponder_enabled:
+            self.manager_rival.set_option("Ponder", "true")
+        else:
+            self.stop_ponder()
+            self.manager_rival.set_option("Ponder", "false")
 
     def finalizar(self):
         if self.state == ST_ENDGAME:
@@ -1913,7 +1927,10 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                     if old_total > 0:
                         for tc, is_player_tc in ((self.tc_player, True), (self.tc_rival, False)):
                             extra = new_secs_extra if is_player_tc else 0
-                            old_base = old_total + (self.secs_extra if is_player_tc else 0)
+                            # When sides changed, tc_player was previously the rival (no extra)
+                            # and tc_rival was previously the player (had secs_extra)
+                            was_player = is_player_tc != side_changed
+                            old_base = old_total + (self.secs_extra if was_player else 0)
                             new_base = new_max_seconds + extra
                             if old_base > 0:
                                 ratio = new_base / old_base

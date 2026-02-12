@@ -119,6 +119,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
     humanize: int = 0
     ponder_enabled: bool = False
     ponder_move: str = ""
+    ponder_display_timer: Optional[QtCore.QTimer] = None
     unlimited_minutes: int = 6
     is_human_side_white: bool
     opening_line: Optional[Dict[str, Any]] = None
@@ -816,9 +817,34 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
     def stop_ponder(self):
         """Stop any ongoing pondering and clear ponder state."""
+        self._stop_ponder_display_timer()
         self.ponder_move = ""
         if self.manager_rival is not None:
             self.manager_rival.stop_ponder()
+
+    def _start_ponder_display_timer(self):
+        """Start a timer to periodically update the thinking display during ponder."""
+        self._stop_ponder_display_timer()
+        if self.thoughtOp > -1 or self.nArrows > 0:
+            self.ponder_display_timer = QtCore.QTimer()
+            self.ponder_display_timer.setInterval(1000)
+            self.ponder_display_timer.timeout.connect(self._ponder_display_update)
+            self.ponder_display_timer.start()
+
+    def _stop_ponder_display_timer(self):
+        """Stop the ponder display update timer."""
+        if self.ponder_display_timer is not None:
+            self.ponder_display_timer.stop()
+            self.ponder_display_timer = None
+
+    def _ponder_display_update(self):
+        """Update the thinking display with the current ponder analysis."""
+        if self.manager_rival and self.manager_rival.is_pondering and self.manager_rival.engine_run:
+            mrm = self.manager_rival.engine_run.mrm
+            if mrm:
+                rm = mrm.best_rm_ordered()
+                if rm:
+                    self.dispatch_rival(rm=rm)
 
     def toggle_ponder(self):
         """Toggle ponder on/off mid-game."""
@@ -940,6 +966,12 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             return
 
         self.state = ST_PLAYING
+
+        # Clear PGN browsing state so that stale variation_history
+        # (set when the user clicks moves in the PGN panel while the
+        # engine is thinking) does not redirect the next human move
+        # into mueve_variation instead of normal play.
+        self.board.variation_history = None
 
         self.human_is_playing = False
         self.rival_is_thinking = False
@@ -1270,6 +1302,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                 seconds_move = 0
             self.manager_rival.run_engine_params.update_var_time(seconds_white, seconds_black, seconds_move)
             self.manager_rival.start_ponder(self.game, self.ponder_move)
+            self._start_ponder_display_timer()
 
     def player_has_moved_dispatcher(self, from_sq: str, to_sq: str, promotion: str = ""):
         """Viene desde el board via MainWindow, es previo, ya que si está pendiente el análisis, sólo se indica que ha
@@ -1592,6 +1625,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             self.play_engine_rival()
 
     def play_engine_rival(self):
+        self._stop_ponder_display_timer()
         self.thinking(True)
         self.pon_toolbar(ToolbarState.ENGINE_PLAYING)
 

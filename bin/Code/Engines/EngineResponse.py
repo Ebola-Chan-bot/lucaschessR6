@@ -342,6 +342,7 @@ class MultiEngineResponse:
             "max_time": self.max_time,
             "max_depth": self.max_depth,
             "nodes": self.nodes,
+            "ponder_move": self.ponder_move,
             "li_rm": [rm.save() for rm in self.li_rm],
         }
         return dic
@@ -354,6 +355,7 @@ class MultiEngineResponse:
         self.max_time = dic["max_time"]
         self.max_depth = dic["max_depth"]
         self.nodes = dic.get("nodes", 0)
+        self.ponder_move = dic.get("ponder_move", "")
         for num, sv in enumerate(dic["li_rm"]):
             rm = EngineResponse(self.name, self.is_white)
             rm.restore(sv)

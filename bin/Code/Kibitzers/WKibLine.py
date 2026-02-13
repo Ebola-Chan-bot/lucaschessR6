@@ -224,6 +224,7 @@ class WKibLine(QtWidgets.QMainWindow):
             self.bt_bottom.hide()
 
         self.setWindowFlags(flags)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AlwaysShowToolTips, self.siTop)
         self.show()
 
     def window_top(self):

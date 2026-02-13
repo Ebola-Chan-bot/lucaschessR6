@@ -509,11 +509,12 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
             if tc.time_is_consumed():
                 t = time.time()
-                if is_player and QTMessages.pregunta(
-                        self.main_window,
-                        f"{_X(_('%1 has won on time.'), self.rival_name)}\n\n{_('Add time and keep playing?')}",
-                ):
-                    min_x = WPlayAgainstEngine.get_extra_minutes(self.main_window)
+                if is_player:
+                    msg = f"{_X(_('%1 has won on time.'), self.rival_name)}\n\n{_('Add time and keep playing?')}"
+                else:
+                    msg = f"{_('Won on time')}\n\n{_('Add time and keep playing?')}"
+                if QTMessages.pregunta(self.main_window, msg):
+                    min_x = WPlayAgainstEngine.get_extra_minutes(self.main_window, is_player)
                     if min_x:
                         more = time.time() - t
                         tc.add_extra_seconds(min_x * 60 + more)

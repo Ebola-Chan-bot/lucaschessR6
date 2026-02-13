@@ -1649,10 +1649,11 @@ def change_rival(parent, configuration, dic, is_create_own_game=False):
         return None
 
 
-def get_extra_minutes(main_window):
+def get_extra_minutes(main_window, is_player=True):
     li_gen: List[(Any, Any)] = [(None, None)]
 
-    config = FormLayout.Spinbox(_("Extra minutes for the player"), 1, 99, 50)
+    label = _("Extra minutes for the player") if is_player else _("Extra minutes for the opponent")
+    config = FormLayout.Spinbox(label, 1, 99, 50)
     li_gen.append((config, 5))
 
     resultado = FormLayout.fedit(li_gen, title=_("Time"), parent=main_window, icon=Iconos.MoverTiempo())

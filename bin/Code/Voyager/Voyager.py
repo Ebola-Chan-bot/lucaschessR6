@@ -463,7 +463,7 @@ class WPosicion(QtWidgets.QWidget):
                     self.scanner_init()
                     self.is_scan_init = True
                 img: QtGui.QImage = data
-                path_png = Code.configuration.temporary_file("png")
+                path_png = str(Code.configuration.temporary_file("png"))
                 img.save(path_png)
                 self.im_scanner = Image.open(path_png)
                 self.scanner_process()
@@ -953,6 +953,7 @@ class Voyager(LCDialog.LCDialog):
         self.setWindowFlags(
             QtCore.Qt.WindowType.WindowCloseButtonHint | QtCore.Qt.Window | QtCore.Qt.WindowType.WindowStaysOnTopHint
         )
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AlwaysShowToolTips)
 
         self.is_game = is_game
         self.game = game.copia()

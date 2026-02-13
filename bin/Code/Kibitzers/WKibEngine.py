@@ -107,6 +107,7 @@ class WKibEngine(WKibCommon.WKibCommon):
         self.need_refresh_data = False  # Se mira cada 200ms en check_input también, para que no se acumule
         # la recepción de señales en profundidades bajas.
         self.stopped = False
+        self._game_version = 0  # Monotonically increasing counter to detect nested/superseded orden_game calls
 
     def change_options(self):
         self.pause()
@@ -133,7 +134,8 @@ class WKibEngine(WKibCommon.WKibCommon):
 
         elif key == "BESTMOVE":
             p = Game.Game(first_position=self.game.last_position)
-            p.read_pv(rm.movimiento())
+            mv = rm.movimiento()
+            p.read_pv(mv)
             if len(p) > 0:
                 move: Move.Move = p.li_moves[0]
                 resp = move.pgn_figurines() if self.with_figurines else move.pgn_translated()
@@ -201,6 +203,8 @@ class WKibEngine(WKibCommon.WKibCommon):
 
     def refresh_data(self):
         self.need_refresh_data = False
+        if self.stopped:
+            return
         mrm = self.engine_run.mrm
         rm = mrm.rm_best()
         if rm is None:
@@ -318,11 +322,16 @@ class WKibEngine(WKibCommon.WKibCommon):
 
         self.game = game
         self.li_moves = []
+        self.need_refresh_data = False
+        self.stopped = True
 
         if self.valid_to_play():
+            self._game_version += 1
+            current_version = self._game_version
             self.engine_run.set_game_position(game, None, False)
-            self.engine_run.play(self.run_engine_params)
-            self.stopped = False
+            if current_version == self._game_version:
+                self.engine_run.play(self.run_engine_params)
+                self.stopped = False
         self.grid.refresh()
 
         self.test_tb_home()

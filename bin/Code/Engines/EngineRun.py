@@ -126,6 +126,7 @@ class EngineRun(QtCore.QObject):
 
         self.config = config
         self._wait_loop: Optional[QtCore.QEventLoop] = None
+        self._bestmoves_to_skip: int = 0
         self.stream_line_processor = StreamLineProcessor()
 
         self.mode_timer_poll = Code.configuration.x_msrefresh_poll_engines > 0
@@ -393,6 +394,14 @@ class EngineRun(QtCore.QObject):
 
                     st = self.state
 
+                    # --- Skip stale output from previously stopped searches ---
+                    if line.startswith("bestmove") and self._bestmoves_to_skip > 0:
+                        self._bestmoves_to_skip -= 1
+                        continue
+                    if st in (EngineState.THINKING, EngineState.PONDERING) and self._bestmoves_to_skip > 0:
+                        # Info lines from a stopped search that precede the stale bestmove
+                        continue
+
                     if st == EngineState.READING_UCI:
                         if line == "uciok":
                             self.state = EngineState.OK
@@ -651,7 +660,6 @@ class EngineRun(QtCore.QObject):
                 self._wait_loop.quit()
             except:
                 pass
-
         # Bloquear señales para evitar eventos durante el cierre
         with contextlib.suppress(RuntimeError, AttributeError):
             self.blockSignals(True)
@@ -729,6 +737,8 @@ class EngineRun(QtCore.QObject):
 
     # --- positions / play ---
     def set_game_position(self, game: Game.Game, movement: Optional[int], pre_move: bool):
+        if self.state in (EngineState.THINKING, EngineState.PONDERING):
+            self._bestmoves_to_skip += 1
         self.stop()
         self.isready()
         order = "startpos" if game.is_fen_initial() else f"fen {game.first_position.fen()}"
@@ -751,6 +761,8 @@ class EngineRun(QtCore.QObject):
         self._send_command(f"position {order}")
 
     def set_fen_position(self, fen: str):
+        if self.state in (EngineState.THINKING, EngineState.PONDERING):
+            self._bestmoves_to_skip += 1
         self.stop()
         self.isready()
         self._send_command(f"position fen {fen}")
@@ -758,6 +770,8 @@ class EngineRun(QtCore.QObject):
 
     def set_game_position_ponder(self, game: Game.Game, ponder_move: str):
         """Set position with ponder move appended for 'go ponder'."""
+        if self.state in (EngineState.THINKING, EngineState.PONDERING):
+            self._bestmoves_to_skip += 1
         self.stop()
         self.isready()
         order = "startpos" if game.is_fen_initial() else f"fen {game.first_position.fen()}"

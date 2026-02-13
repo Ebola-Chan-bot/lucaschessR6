@@ -1711,7 +1711,10 @@ class Manager:
             vh = self.board.variation_history
             if vh.count("|") > 0 or int(vh) < len(self.game) - 1:
                 return self.mueve_variation(from_sq, to_sq, promotion="")
-        return self.messenger(from_sq, to_sq, promotion)
+        result = self.messenger(from_sq, to_sq, promotion)
+        if result and self.board.variation_history is not None:
+            self.board.variation_history = str(len(self.game) - 1)
+        return result
 
     def mueve_variation(self, from_sq, to_sq, promotion=""):
         link_variation_pressed = self.main_window.pgn_information.variantes.link_variation_pressed

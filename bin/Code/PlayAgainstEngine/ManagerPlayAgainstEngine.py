@@ -987,17 +987,22 @@ class ManagerPlayAgainstEngine(Manager.Manager):
     def final_x(self):
         return self.finalizar()
 
+    def _stop_rival_engine_for_end(self, event: str):
+        if self.manager_rival is None:
+            return
+        self._engine_diag_event(event, snapshot=self.manager_rival.engine_snapshot())  # 仅调试用
+        self.manager_rival.stop()
+        self._schedule_engine_diag_snapshot(f"{event}-followup")  # 仅调试用
+
     def stop_engine(self):
         if not self.human_is_playing:
-            if self.manager_rival is not None:
-                self._engine_diag_event("stop-engine-request", snapshot=self.manager_rival.engine_snapshot())  # 仅调试用
-                self.manager_rival.stop()
-                self._schedule_engine_diag_snapshot("stop-engine-followup")  # 仅调试用
+            self._stop_rival_engine_for_end("stop-engine-request")
 
     def finalizar(self):
         if self.state == ST_ENDGAME:
             return True
         self._engine_diag_event("finalizar-request")  # 仅调试用
+        self._stop_rival_engine_for_end("finalizar-stop-engine")  # 仅调试用
 
         def close_comun():
             if self.timed:
@@ -1037,6 +1042,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             if with_question:
                 if not QTMessages.pregunta(self.main_window, _("Do you want to resign?")):
                     return False  # no abandona
+            self._stop_rival_engine_for_end("resign-stop-engine")  # 仅调试用
             if self.timed:
                 self.main_window.stop_clock()
                 self.show_clocks()
@@ -2022,6 +2028,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
     def show_result(self):
         self.state = ST_ENDGAME
+        self._stop_rival_engine_for_end("show-result-stop-engine")  # 仅调试用
         self.disable_all()
         self.human_is_playing = False
         if self.timed:

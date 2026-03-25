@@ -129,7 +129,8 @@ class EngineManagerPlay(EngineManager.EngineManager):
             or self.seconds_humanize > 0
         )
         state = SimpleNamespace(
-            ini_time=time.time(), secs_humanize=self.seconds_humanize, with_timer=with_timer, found_bestmove=False
+            ini_time=time.time(), secs_humanize=self.seconds_humanize, with_timer=with_timer, found_bestmove=False,  # 仅调试用
+            last_watchdog_bucket=-1  # 仅调试用
         )
 
         self.seconds_humanize = 0  # must be restarted each time
@@ -158,6 +159,17 @@ class EngineManagerPlay(EngineManager.EngineManager):
 
             if bestmove is not None:
                 state.found_bestmove = True
+            else:  # 仅调试用
+                elapsed = time.time() - state.ini_time  # 仅调试用
+                bucket = int(elapsed // 15)  # 仅调试用
+                if bucket > 0 and bucket != state.last_watchdog_bucket:  # 仅调试用
+                    state.last_watchdog_bucket = bucket  # 仅调试用
+                    self.log_diagnostic(  # 仅调试用
+                        "wait-bestmove",  # 仅调试用
+                        phase="play",  # 仅调试用
+                        elapsed=round(elapsed, 1),  # 仅调试用
+                        snapshot=self.engine_snapshot(),  # 仅调试用
+                    )  # 仅调试用
 
             if state.found_bestmove:
                 if state.secs_humanize > 0:
@@ -306,7 +318,8 @@ class EngineManagerPlay(EngineManager.EngineManager):
             or self.seconds_humanize > 0
         )
         state = SimpleNamespace(
-            ini_time=time.time(), secs_humanize=self.seconds_humanize, with_timer=with_timer, found_bestmove=False
+            ini_time=time.time(), secs_humanize=self.seconds_humanize, with_timer=with_timer, found_bestmove=False,  # 仅调试用
+            last_watchdog_bucket=-1  # 仅调试用
         )
 
         self.seconds_humanize = 0
@@ -334,6 +347,17 @@ class EngineManagerPlay(EngineManager.EngineManager):
 
             if bestmove is not None:
                 state.found_bestmove = True
+            else:  # 仅调试用
+                elapsed = time.time() - state.ini_time  # 仅调试用
+                bucket = int(elapsed // 15)  # 仅调试用
+                if bucket > 0 and bucket != state.last_watchdog_bucket:  # 仅调试用
+                    state.last_watchdog_bucket = bucket  # 仅调试用
+                    self.log_diagnostic(  # 仅调试用
+                        "wait-bestmove",  # 仅调试用
+                        phase="ponderhit",  # 仅调试用
+                        elapsed=round(elapsed, 1),  # 仅调试用
+                        snapshot=self.engine_snapshot(),  # 仅调试用
+                    )  # 仅调试用
 
             if state.found_bestmove:
                 if state.secs_humanize > 0:

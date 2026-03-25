@@ -27,6 +27,10 @@ class EngineManager:
         self.elapsed_time = QtCore.QElapsedTimer()
 
         self.path_log: Optional[str] = None
+        self.fichero_log: Optional[str] = None
+        self.fichero_diag: Optional[str] = None  # 仅调试用
+        self.diagnostic_context: Optional[str] = None  # 仅调试用
+        self.diagnostic_session: Optional[str] = None  # 仅调试用
 
         self.mrm: Optional[EngineResponse.MultiEngineResponse] = None
         self.bestmove: Optional[str] = None
@@ -144,6 +148,10 @@ class EngineManager:
             config_enginerun.emulate_movetime = True
         if Code.list_engine_managers.with_logs:
             config_enginerun.path_log = self.set_path_log()
+        if self.fichero_log:  # 仅调试用
+            config_enginerun.path_log = self.fichero_log  # 仅调试用
+        if self.fichero_diag:  # 仅调试用
+            config_enginerun.path_diag = self.fichero_diag  # 仅调试用
 
         self.engine_run = EngineRun.EngineRun(config_enginerun)
         if self.engine_run.state == EngineRun.EngineState.INVALID_ENGINE:
@@ -166,6 +174,43 @@ class EngineManager:
             if __debug__:
                 Debug.prln(f"EngineManager.stop() called for {self.engine.name}", color="yellow")
             self.engine_run.stop()
+
+    def enable_diagnostics(self, context: str, session: Optional[str] = None):  # 仅调试用
+        folder = Util.opj(Code.configuration.paths.folder_userdata(), "EngineLogs", "PlayAgainstEngine")  # 仅调试用
+        if not os.path.isdir(folder):  # 仅调试用
+            Util.create_folder(folder)  # 仅调试用
+
+        safe_context = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in context)  # 仅调试用
+        safe_engine = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in self.engine.name)  # 仅调试用
+        safe_session = session or self.huella  # 仅调试用
+        base = Util.opj(folder, f"{safe_context}_{safe_engine}_{safe_session}")  # 仅调试用
+
+        self.diagnostic_context = context  # 仅调试用
+        self.diagnostic_session = safe_session  # 仅调试用
+        self.fichero_log = f"{base}.uci.log"  # 仅调试用
+        self.fichero_diag = f"{base}.diag.log"  # 仅调试用
+
+        if self.engine_run:  # 仅调试用
+            self.engine_run.log_open(self.fichero_log)  # 仅调试用
+            self.engine_run.diag_open(self.fichero_diag)  # 仅调试用
+            self.engine_run.log_diagnostic(  # 仅调试用
+                "diagnostic-session-attached",  # 仅调试用
+                context=self.diagnostic_context,  # 仅调试用
+                session=self.diagnostic_session,  # 仅调试用
+            )  # 仅调试用
+
+    def log_diagnostic(self, event: str, **info):  # 仅调试用
+        if self.engine_run:  # 仅调试用
+            self.engine_run.log_diagnostic(event, **info)  # 仅调试用
+
+    def engine_snapshot(self) -> dict:  # 仅调试用
+        if self.engine_run:  # 仅调试用
+            return self.engine_run.diagnostic_snapshot()  # 仅调试用
+        return {  # 仅调试用
+            "engine": self.engine.name,  # 仅调试用
+            "state": "not-started",  # 仅调试用
+            "session": self.diagnostic_session,  # 仅调试用
+        }  # 仅调试用
 
     def close(self):
         if self.is_closed:

@@ -30,6 +30,7 @@ class StartEngineParams:
     priority: Optional[int] = None
     args: Optional[list] = None
     path_log: Optional[str] = None
+    path_diag: Optional[str] = None  # 仅调试用
     emulate_movetime: bool = False
     faster_mode_always: bool = False
 
@@ -138,6 +139,10 @@ class EngineRun(QtCore.QObject):
         self.config = config
         self._wait_loop: Optional[QtCore.QEventLoop] = None
         self.stream_line_processor = StreamLineProcessor()
+        self.diag = None  # 仅调试用
+        self.recent_commands: List[str] = []  # 仅调试用
+        self.recent_output: List[str] = []  # 仅调试用
+        self.state_changed_at = time.time()  # 仅调试用
 
         self.mode_timer_poll = Code.configuration.x_msrefresh_poll_engines > 0 and not config.faster_mode_always
 
@@ -150,6 +155,10 @@ class EngineRun(QtCore.QObject):
             self._timer_poll.timeout.connect(self._poll_output)
 
         self.process: Optional[QtCore.QProcess] = QtCore.QProcess(self)
+
+        if self.config.path_diag:  # 仅调试用
+            self._diag_open(self.config.path_diag)  # 仅调试用
+        self._diag("engine-run-init", path_exe=self.config.path_exe, args=self.config.args or [])  # 仅调试用
 
         if not self.mode_timer_poll:
             # noinspection PyUnresolvedReferences
@@ -187,19 +196,20 @@ class EngineRun(QtCore.QObject):
             self.process.setProcessEnvironment(env)
 
         self.process.start(path_exe, arguments=args)
+        self._diag("process-started", process_state=self._process_state_name())  # 仅调试用
 
         size = Util.filesize(path_exe)
         ms = max(10000, size*10000//5000000)
 
         if not self.process.waitForStarted(ms):
-            self.state = EngineState.INVALID_ENGINE
+            self._set_state(EngineState.INVALID_ENGINE, "waitForStarted-failed", process_state=self._process_state_name())  # 仅调试用
             try:
                 self.process.kill()
             except Exception:
                 self._log_exception("Process kill failed")
             self.process = None
             return
-        self.state = EngineState.STARTED
+        self._set_state(EngineState.STARTED, "waitForStarted-ok", pid=self.process.processId())  # 仅调试用
 
         # set priority if requested
         if self.config.priority is not None:
@@ -267,6 +277,88 @@ class EngineRun(QtCore.QObject):
             except Exception:
                 self._log_exception("Log close failed")
             self.log = None
+
+    def _diag_open(self, file: str):  # 仅调试用
+        try:  # 仅调试用
+            folder = os.path.dirname(file)  # 仅调试用
+            if folder and not os.path.isdir(folder):  # 仅调试用
+                Util.create_folder(folder)  # 仅调试用
+            self.diag = open(file, "at", encoding="utf-8")  # 仅调试用
+            self.diag.write(f"{str(Util.today())}       {'-' * 70}\n\n")  # 仅调试用
+        except:  # 仅调试用
+            self.diag = None  # 仅调试用
+
+    def _diag_close(self):  # 仅调试用
+        if self.diag:  # 仅调试用
+            try:  # 仅调试用
+                self.diag.close()  # 仅调试用
+            except:  # 仅调试用
+                pass  # 仅调试用
+            self.diag = None  # 仅调试用
+
+    def _remember(self, storage: List[str], text: str, limit: int = 25):  # 仅调试用
+        storage.append(text)  # 仅调试用
+        if len(storage) > limit:  # 仅调试用
+            del storage[:-limit]  # 仅调试用
+
+    @staticmethod
+    def _state_name(state: EngineState) -> str:  # 仅调试用
+        return state.name if isinstance(state, EngineState) else str(state)  # 仅调试用
+
+    def _process_state_name(self) -> str:  # 仅调试用
+        if self.process is None:  # 仅调试用
+            return "no-process"  # 仅调试用
+        try:  # 仅调试用
+            return {  # 仅调试用
+                QtCore.QProcess.ProcessState.NotRunning: "NotRunning",  # 仅调试用
+                QtCore.QProcess.ProcessState.Starting: "Starting",  # 仅调试用
+                QtCore.QProcess.ProcessState.Running: "Running",  # 仅调试用
+            }.get(self.process.state(), str(self.process.state()))  # 仅调试用
+        except (RuntimeError, AttributeError):  # 仅调试用
+            return "invalid-process"  # 仅调试用
+
+    def _diag(self, event: str, **info):  # 仅调试用
+        if self.diag is None:  # 仅调试用
+            return  # 仅调试用
+        try:  # 仅调试用
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())  # 仅调试用
+            parts = [f"[{timestamp}] {event}"]  # 仅调试用
+            for key, value in info.items():  # 仅调试用
+                parts.append(f"{key}={value!r}")  # 仅调试用
+            self.diag.write(" | ".join(parts) + "\n")  # 仅调试用
+            self.diag.flush()  # 仅调试用
+        except:  # 仅调试用
+            pass  # 仅调试用
+
+    def _set_state(self, new_state: EngineState, reason: str, **info):  # 仅调试用
+        old_state = self.state  # 仅调试用
+        self.state = new_state  # 仅调试用
+        self.state_changed_at = time.time()  # 仅调试用
+        if old_state != new_state:  # 仅调试用
+            self._diag(  # 仅调试用
+                "state-change",  # 仅调试用
+                old_state=self._state_name(old_state),  # 仅调试用
+                new_state=self._state_name(new_state),  # 仅调试用
+                reason=reason,  # 仅调试用
+                **info,  # 仅调试用
+            )  # 仅调试用
+        else:  # 仅调试用
+            self._diag("state-repeat", state=self._state_name(new_state), reason=reason, **info)  # 仅调试用
+
+    def diagnostic_snapshot(self) -> dict:  # 仅调试用
+        pid = None  # 仅调试用
+        if self.process is not None:  # 仅调试用
+            with contextlib.suppress(RuntimeError, AttributeError, TypeError, ValueError):  # 仅调试用
+                pid = int(self.process.processId())  # 仅调试用
+        return {  # 仅调试用
+            "engine": self.config.name,  # 仅调试用
+            "state": self._state_name(self.state),  # 仅调试用
+            "process_state": self._process_state_name(),  # 仅调试用
+            "pid": pid,  # 仅调试用
+            "time_played": round(self.time_played(), 3),  # 仅调试用
+            "recent_commands": list(self.recent_commands),  # 仅调试用
+            "recent_output": list(self.recent_output),  # 仅调试用
+        }  # 仅调试用
 
     # --- utils ---
     @staticmethod
@@ -380,10 +472,12 @@ class EngineRun(QtCore.QObject):
     def _send_command(self, command: str) -> bool:
         try:
             if self.process is None:
+                self._diag("send-command-skipped", command=command, reason="process-none")  # 仅调试用
                 return False
             try:
                 running = self.process.state() == QtCore.QProcess.ProcessState.Running
             except (RuntimeError, AttributeError):
+                self._diag("send-command-skipped", command=command, reason="invalid-process")  # 仅调试用
                 return False
 
             if running:
@@ -398,14 +492,20 @@ class EngineRun(QtCore.QObject):
 
                 if __debug__ and Debug.DEBUG_ENGINES_SEND:
                     Debug.prln(f"->{self.config.name}: {command}")
+                self._remember(self.recent_commands, command)  # 仅调试用
+                self._diag("send-command", command=command, state=self._state_name(self.state))  # 仅调试用
                 if self.log is not None:
                     try:
                         self.log.write(f"-> {command}\n")
                     except Exception:
                         self._log_exception("Log write failed")
                 return True
+            self._diag("send-command-skipped", command=command, reason="process-not-running")  # 仅调试用
             return False
         except Exception:
+            if __debug__:
+                Debug.prln(f"Unexpected _send_command error:\n{traceback.format_exc()}", color="red")
+            self._diag("send-command-error", command=command, error=traceback.format_exc())  # 仅调试用
             self._log_exception("Unexpected _send_command error")
             return False
 
@@ -431,6 +531,7 @@ class EngineRun(QtCore.QObject):
             lines = self.stream_line_processor.convert(output)
             for line in lines:
                 try:
+                    self._remember(self.recent_output, line)  # 仅调试用
                     if __debug__ and Debug.DEBUG_ENGINES:
                         Debug.prln(f"{self.config.name}: {line}")
                     if self.log is not None:
@@ -443,7 +544,7 @@ class EngineRun(QtCore.QObject):
 
                     if st == EngineState.READING_UCI:
                         if line == "uciok":
-                            self.state = EngineState.OK
+                            self._set_state(EngineState.OK, "uciok")  # 仅调试用
                             if self.mode_timer_poll:
                                 # APAGAMOS POLLING
                                 self._stop_polling()
@@ -455,7 +556,7 @@ class EngineRun(QtCore.QObject):
 
                     elif st == EngineState.PENDING_READYOK:
                         if line == "readyok":
-                            self.state = EngineState.OK
+                            self._set_state(EngineState.OK, "readyok")  # 仅调试用
                             if self.mode_timer_poll:
                                 # APAGAMOS POLLING
                                 self._stop_polling()
@@ -466,7 +567,7 @@ class EngineRun(QtCore.QObject):
                     elif st == EngineState.READING_EVAL_STOCKFISH:
                         self.li_cache.append(line)
                         if line.startswith("Final "):
-                            self.state = EngineState.OK
+                            self._set_state(EngineState.OK, "eval-finished")  # 仅调试用
                             if self.mode_timer_poll:
                                 # APAGAMOS POLLING
                                 self._stop_polling()
@@ -501,7 +602,7 @@ class EngineRun(QtCore.QObject):
                                             self._log_exception("depth_changed emit failed")
 
                         if line.startswith("bestmove"):
-                            self.state = EngineState.OK
+                            self._set_state(EngineState.OK, "bestmove", line=line)  # 仅调试用
                             if self.mode_timer_poll:
                                 # APAGAMOS POLLING
                                 self._stop_polling()
@@ -530,7 +631,7 @@ class EngineRun(QtCore.QObject):
     @QtCore.Slot(int, QtCore.QProcess.ExitStatus)
     def _engine_terminated(self, exit_code: int, exit_status: QtCore.QProcess.ExitStatus):
         try:
-            self.state = EngineState.OFF
+            self._set_state(EngineState.OFF, "engine-terminated", exit_code=exit_code, exit_status=int(exit_status))  # 仅调试用
             if self.mode_timer_poll:
                 # APAGAMOS POLLING
                 self._stop_polling()
@@ -555,7 +656,7 @@ class EngineRun(QtCore.QObject):
 
     # --- wait helper ---
     def _wait_for(self, command: str, wait_state: EngineState, timeout_ms: int = 3000) -> bool:
-        self.state = wait_state
+        self._set_state(wait_state, "wait-for-start", command=command, timeout_ms=timeout_ms)  # 仅调试用
 
         self._wait_loop = QtCore.QEventLoop()
 
@@ -574,6 +675,13 @@ class EngineRun(QtCore.QObject):
         timer.stop()
 
         ok = self.state == EngineState.OK
+        self._diag(  # 仅调试用
+            "wait-for-finished",  # 仅调试用
+            command=command,  # 仅调试用
+            ok=ok,  # 仅调试用
+            timeout_ms=timeout_ms,  # 仅调试用
+            snapshot=self.diagnostic_snapshot(),  # 仅调试用
+        )  # 仅调试用
         if self.mode_timer_poll:
             # Si salimos por timeout, apagar polling manualmente
             if not ok:
@@ -602,13 +710,20 @@ class EngineRun(QtCore.QObject):
     def log_close(self):
         self._log_close()
 
+    def diag_open(self, file):  # 仅调试用
+        self._diag_open(file)  # 仅调试用
+
     def stop(self):
         try:
             self._timerstop_off()
             is_pondering = self.control_ponder and self.control_ponder.ponder
             if self.state not in (EngineState.OFF, EngineState.OK) or is_pondering:
+                self._diag("stop-requested", snapshot=self.diagnostic_snapshot())  # 仅调试用
                 self._send_command("stop")
         except Exception:
+            if __debug__:
+                Debug.prln(f"Error in stop():\n{traceback.format_exc()}", color="red")
+            self._diag("stop-error", error=traceback.format_exc())  # 仅调试用
             self._log_exception("Error in stop()")
 
     def time_played(self):
@@ -665,6 +780,7 @@ class EngineRun(QtCore.QObject):
 
     @QtCore.Slot()
     def _on_timeout_timerstop(self):
+        self._diag("timerstop-timeout", snapshot=self.diagnostic_snapshot())  # 仅调试用
         self.stop()
 
     def stop_and_wait(self, timeout_ms: int = 3000) -> bool:
@@ -681,6 +797,7 @@ class EngineRun(QtCore.QObject):
         """
         if self.state == EngineState.CLOSED:
             return
+        self._diag("close-begin", snapshot=self.diagnostic_snapshot())  # 仅调试用
         self.emit_enabled = False
 
         if self.mode_timer_poll:
@@ -709,7 +826,7 @@ class EngineRun(QtCore.QObject):
         # Bloquear señales para evitar eventos durante el cierre
         with contextlib.suppress(RuntimeError, AttributeError):
             self.blockSignals(True)
-        self.state = EngineState.OFF
+        self._set_state(EngineState.OFF, "close-begin")  # 仅调试用
 
         # Detener timer si existe
         try:
@@ -775,7 +892,9 @@ class EngineRun(QtCore.QObject):
             self.blockSignals(False)
         except Exception:
             self._log_exception("blockSignals failed")
-        self.state = EngineState.CLOSED
+        self._set_state(EngineState.CLOSED, "close-end")  # 仅调试用
+        self._diag("close-end", snapshot=self.diagnostic_snapshot())  # 仅调试用
+        self._diag_close()  # 仅调试用
 
     # --- positions / play ---
     def set_game_position(self, game: Game.Game, movement: Optional[int], pre_move: bool):
@@ -799,6 +918,7 @@ class EngineRun(QtCore.QObject):
                 order += f" moves {game.pv_hasta(movement)}"
         order = f"position {order}"
 
+        self._diag("set-game-position", movement=movement, pre_move=pre_move, order=order)  # 仅调试用
         if self.control_ponder:
             self.control_ponder.send_command(order)
         else:
@@ -814,6 +934,7 @@ class EngineRun(QtCore.QObject):
             order += f" moves {pv}"
         order += f" {ponder_move}" if pv else f" moves {ponder_move}"
 
+        self._diag("set-game-position-ponder", order=order, ponder_move=ponder_move)  # 仅调试用
         self._send_command(f"position {order}")
         self.is_white = not game.is_white()
 
@@ -823,6 +944,7 @@ class EngineRun(QtCore.QObject):
         self.is_white = fen.split()[1] == "w"
         order = f"position fen {fen}"
 
+        self._diag("set-fen-position", fen=fen)  # 仅调试用
         if self.control_ponder:
             self.control_ponder.send_command(order)
         else:
@@ -835,7 +957,7 @@ class EngineRun(QtCore.QObject):
             self.last_time_depth_emit = 0
 
             self.play_time_begin = time.time()
-            self.state = EngineState.THINKING
+            self._set_state(EngineState.THINKING, "go", args=args)  # 仅调试用
 
             if self.mode_timer_poll:
                 # ACTIVAMOS POLLING
@@ -886,7 +1008,7 @@ class EngineRun(QtCore.QObject):
     def ponderhit(self):
         if self.state == EngineState.PONDERING:
             self.play_time_begin = time.time()
-            self.state = EngineState.THINKING
+            self._set_state(EngineState.THINKING, "ponderhit")  # 仅调试用
             self._send_command("ponderhit")
 
     def play_ponder(self, run_engine_params: RunEngineParams):
@@ -896,7 +1018,7 @@ class EngineRun(QtCore.QObject):
             self.last_time_depth_emit = 0
 
             self.play_time_begin = time.time()
-            self.state = EngineState.PONDERING
+            self._set_state(EngineState.PONDERING, "go-ponder", args=args)  # 仅调试用
 
             if self.mode_timer_poll:
                 self._start_polling()
@@ -943,13 +1065,16 @@ class EngineRun(QtCore.QObject):
     def run_eval_stockfish(self, fen: str):
         self.set_fen_position(fen)
         self.li_cache = []
-        self.state = EngineState.READING_EVAL_STOCKFISH
+        self._set_state(EngineState.READING_EVAL_STOCKFISH, "run-eval", fen=fen)  # 仅调试用
 
         if self.mode_timer_poll:
             # ACTIVAMOS POLLING
             self._start_polling()
 
         self._send_command("eval")
+
+    def log_diagnostic(self, event: str, **info):  # 仅调试用
+        self._diag(event, **info)  # 仅调试用
 
 
 class Ponder:
@@ -1053,3 +1178,4 @@ class Ponder:
 
             if self._start_polling:
                 self._start_polling()
+

@@ -143,6 +143,7 @@ class EngineRun(QtCore.QObject):
         self.recent_commands: List[str] = []  # 仅调试用
         self.recent_output: List[str] = []  # 仅调试用
         self.state_changed_at = time.time()  # 仅调试用
+        self.play_time_begin = None
 
         self.mode_timer_poll = Code.configuration.x_msrefresh_poll_engines > 0 and not config.faster_mode_always
 
@@ -236,7 +237,6 @@ class EngineRun(QtCore.QObject):
             self.set_multipv(config.num_multipv)
 
         self._ucinewgame()
-        self.play_time_begin = None
         self.emit_enabled = True
 
     def _start_polling(self):

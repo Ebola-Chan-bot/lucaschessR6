@@ -664,7 +664,7 @@ class EngineRun(QtCore.QObject):
     def stop(self):
         try:
             self._timerstop_off()
-            if self.state != EngineState.OFF:
+            if self.state not in (EngineState.OFF, EngineState.OK):
                 self._diag("stop-requested", snapshot=self.diagnostic_snapshot())  # 仅调试用
                 self._send_command("stop")
         except:

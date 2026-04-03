@@ -203,6 +203,13 @@ class WKibEngine(WKibCommon.WKibCommon):
         rm = mrm.rm_best()
         if rm is None:
             return
+        # Verify best move is legal in current position
+        mov = rm.movimiento()
+        if mov:
+            test_game = Game.Game(first_position=self.game.last_position)
+            test_game.read_pv(mov)
+            if len(test_game) == 0:
+                return
         if self.is_candidates:
             self.li_moves = mrm.li_rm
             if self.kibitzer.pointofview == KIB_BEFORE_MOVE and self.cpu.last_move:

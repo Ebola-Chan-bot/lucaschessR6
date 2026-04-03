@@ -144,6 +144,7 @@ class EngineRun(QtCore.QObject):
         self.recent_output: List[str] = []  # 仅调试用
         self.state_changed_at = time.time()  # 仅调试用
         self.play_time_begin = None
+        self._awaiting_first_depth = False
 
         self.mode_timer_poll = Code.configuration.x_msrefresh_poll_engines > 0 and not config.faster_mode_always
 
@@ -580,6 +581,25 @@ class EngineRun(QtCore.QObject):
                             self.li_cache = []
 
                     elif st in (EngineState.THINKING, EngineState.PONDERING):
+                        # Filter stale output from previous search before depth 1 of new search
+                        if self._awaiting_first_depth:
+                            if line.startswith("info ") and " depth " in line:
+                                parts = line.split()
+                                for idx, tok in enumerate(parts):
+                                    if tok == "depth" and idx + 1 < len(parts):
+                                        try:
+                                            d = int(parts[idx + 1])
+                                            if d <= 1:
+                                                self._awaiting_first_depth = False
+                                            else:
+                                                self.mrm = EngineResponse.MultiEngineResponse(self.config.name, self.is_white)
+                                                continue
+                                        except ValueError:
+                                            pass
+                                        break
+                            elif line.startswith("bestmove"):
+                                continue
+
                         emited_depth = False
                         new_depth = 0
                         current_time = int(time.time() * 1000)
@@ -602,6 +622,8 @@ class EngineRun(QtCore.QObject):
                                             self._log_exception("depth_changed emit failed")
 
                         if line.startswith("bestmove"):
+                            if self.mrm is not None and len(self.mrm.li_rm) == 0:
+                                continue
                             self._set_state(EngineState.OK, "bestmove", line=line)  # 仅调试用
                             if self.mode_timer_poll:
                                 # APAGAMOS POLLING
@@ -958,6 +980,7 @@ class EngineRun(QtCore.QObject):
 
             self.play_time_begin = time.time()
             self._set_state(EngineState.THINKING, "go", args=args)  # 仅调试用
+            self._awaiting_first_depth = True
 
             if self.mode_timer_poll:
                 # ACTIVAMOS POLLING
@@ -1008,6 +1031,7 @@ class EngineRun(QtCore.QObject):
     def ponderhit(self):
         if self.state == EngineState.PONDERING:
             self.play_time_begin = time.time()
+            self._awaiting_first_depth = True
             self._set_state(EngineState.THINKING, "ponderhit")  # 仅调试用
             self._send_command("ponderhit")
 
@@ -1018,6 +1042,7 @@ class EngineRun(QtCore.QObject):
             self.last_time_depth_emit = 0
 
             self.play_time_begin = time.time()
+            self._awaiting_first_depth = True
             self._set_state(EngineState.PONDERING, "go-ponder", args=args)  # 仅调试用
 
             if self.mode_timer_poll:

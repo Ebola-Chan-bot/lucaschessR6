@@ -175,8 +175,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
     def _init_vars(self, dic_var: Dict[str, Any]):
         self.reinicio = dic_var
-        if "_ENGINE_DIAG_SESSION" not in self.reinicio:  # 仅调试用
-            self.reinicio["_ENGINE_DIAG_SESSION"] = Util.huella()  # 仅调试用
 
         self.game_type = GT_AGAINST_ENGINE
         self.human_is_playing = False
@@ -505,17 +503,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             self.manager_rival = self.procesador.create_manager_engine(
                 self.engine_rival, rival_time_ms, rival_depth, self.nodes, self.nAjustarFuerza != ADJUST_BETTER
             )
-            manager_rival = self.manager_rival  # 仅调试用
-            session_id = self.reinicio.get("_ENGINE_DIAG_SESSION") if self.reinicio else None  # 仅调试用
-            if manager_rival is not None:  # 仅调试用
-                manager_rival.enable_diagnostics("play-engine", session_id)  # 仅调试用
-                manager_rival.check_engine()  # 仅调试用
-                self._engine_diag_event(  # 仅调试用
-                    "manager-rival-ready",  # 仅调试用
-                    rival_time_ms=rival_time_ms,  # 仅调试用
-                    rival_depth=rival_depth,  # 仅调试用
-                    nodes=self.nodes,  # 仅调试用
-                )  # 仅调试用
+            self.manager_rival.check_engine()  # para que el tiempo de carga del ejecutable no compute
 
         # self.manager_rival.is_white = self.is_engine_side_white
         self.lirm_engine = []
@@ -523,31 +511,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.resign_limit = -99999  # never
         self.resign_limit = dic_var["RESIGN"]
         self.humanize = dic_var.get("LEVEL_HUMANIZE", 0)
-        if self.manager_rival is not None:  # 仅调试用
-            self.manager_rival.set_option("Ponder", "true" if self.ponder_enabled else "false")  # 仅调试用
-
-    def _engine_diag_event(self, event: str, **info):  # 仅调试用
-        if not self.manager_rival:  # 仅调试用
-            return  # 仅调试用
-        info.setdefault("manager_state", self.state)  # 仅调试用
-        info.setdefault("game_len", len(self.game))  # 仅调试用
-        info.setdefault("human_is_playing", self.human_is_playing)  # 仅调试用
-        info.setdefault("rival_is_thinking", self.rival_is_thinking)  # 仅调试用
-        info.setdefault("ponder_enabled", self.ponder_enabled)  # 仅调试用
-        info.setdefault("ponder_move", self.ponder_move)  # 仅调试用
-        self.manager_rival.log_diagnostic(event, **info)  # 仅调试用
-
-    def _schedule_engine_diag_snapshot(self, event: str, delay_ms: int = 2500):  # 仅调试用
-        manager_rival = self.manager_rival  # 仅调试用
-        if not manager_rival:  # 仅调试用
-            return  # 仅调试用
-
-        def delayed():  # 仅调试用
-            if self.manager_rival is not manager_rival:  # 仅调试用
-                return  # 仅调试用
-            self._engine_diag_event(event, delayed_ms=delay_ms, snapshot=manager_rival.engine_snapshot())  # 仅调试用
-
-        QtCore.QTimer.singleShot(delay_ms, delayed)  # 仅调试用
+        self.manager_rival.set_option("Ponder", "true" if self.ponder_enabled else "false")
 
     def pon_toolbar(self, tb_state: ToolbarState):
         self.tb_huella = Util.huella()
@@ -666,7 +630,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         return time_s
 
     def run_action(self, key: int):
-        self._engine_diag_event("run-action", key=key)  # 仅调试用
         if key == TB_CANCEL:
             self.finalizar()
 
@@ -924,7 +887,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.goto_end()
 
     def close_position(self, key: int):
-        self._engine_diag_event("close-position", key=key)  # 仅调试用
         self.main_window.deactivate_eboard(100)
         if key == TB_CLOSE:
             self.autosave_now()
@@ -955,7 +917,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.play_next_move()
 
     def reiniciar(self, si_pregunta: bool):
-        self._engine_diag_event("reiniciar-request", ask=si_pregunta)  # 仅调试用
         if self.state == ST_ENDGAME and self.play_while_win:
             si_pregunta = False
         if si_pregunta:
@@ -967,7 +928,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             self.main_window.stop_clock()
         self.analyze_terminate()
         if self.manager_rival is not None:
-            self._engine_diag_event("reiniciar-close-engine", snapshot=self.manager_rival.engine_snapshot())  # 仅调试用
             self.manager_rival.close()
             self.manager_rival = None
         if self.book_rival_select == SELECTED_BY_PLAYER or self.nAjustarFuerza == ADJUST_SELECTED_BY_PLAYER:
@@ -1060,7 +1020,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.play_next_move()
 
     def xpause(self):
-        self._engine_diag_event("pause-request")  # 仅调试用
         is_white = self.game.last_position.is_white
         tc = self.tc_white if is_white else self.tc_black
         if is_white == self.is_human_side_white:
@@ -1079,7 +1038,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.pon_toolbar(ToolbarState.GAME_PAUSED)
 
     def xcontinue(self):
-        self._engine_diag_event("continue-request")  # 仅调试用
         self.state = ST_PLAYING
         self.board.set_position(self.game.last_position)
         self.pon_toolbar(ToolbarState.HUMAN_PLAYING)
@@ -1089,22 +1047,19 @@ class ManagerPlayAgainstEngine(Manager.Manager):
     def final_x(self):
         return self.finalizar()
 
-    def _stop_rival_engine_for_end(self, event: str):
+    def _stop_rival_engine_for_end(self):
         if self.manager_rival is None:
             return
-        self._engine_diag_event(event, snapshot=self.manager_rival.engine_snapshot())  # 仅调试用
         self.manager_rival.stop()
-        self._schedule_engine_diag_snapshot(f"{event}-followup")  # 仅调试用
 
     def stop_engine(self):
         if not self.human_is_playing:
-            self._stop_rival_engine_for_end("stop-engine-request")
+            self._stop_rival_engine_for_end()
 
     def finalizar(self):
         if self.state == ST_ENDGAME:
             return True
-        self._engine_diag_event("finalizar-request")  # 仅调试用
-        self._stop_rival_engine_for_end("finalizar-stop-engine")  # 仅调试用
+        self._stop_rival_engine_for_end()
 
         def close_comun():
             if self.timed:
@@ -1114,7 +1069,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             self.crash_adjourn_end()
             self.analyze_terminate()
             self.state = ST_ENDGAME
-            self._engine_diag_event("finalizar-close-common")  # 仅调试用
             self.manager_tutor.close()
 
         if len(self.game) > 0:
@@ -1144,7 +1098,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             if with_question:
                 if not QTMessages.pregunta(self.main_window, _("Do you want to resign?")):
                     return False  # no abandona
-            self._stop_rival_engine_for_end("resign-stop-engine")  # 仅调试用
+            self._stop_rival_engine_for_end()
             if self.timed:
                 self.main_window.stop_clock()
                 self.show_clocks()
@@ -1862,25 +1816,21 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             self.play_engine_rival()
 
     def play_engine_rival(self):
-        self._engine_diag_event("play-engine-rival-start", snapshot=self.manager_rival.engine_snapshot())  # 仅调试用
         self._stop_ponder_display_timer()
         self.thinking(True)
         self.pon_toolbar(ToolbarState.ENGINE_PLAYING)
 
         if self.ponder_enabled and self.manager_rival.is_pondering and self.ponder_move:
-            human_move = None  # 仅调试用
             last_move = self.game.last_jg()
             if last_move:
                 human_move = last_move.movimiento()
                 if human_move == self.ponder_move:
                     self.ponder_move = ""
-                    self._engine_diag_event("play-engine-rival-ponderhit", human_move=human_move)  # 仅调试用
                     rm_rival = self.manager_rival.play_ponderhit(dispacher=self.dispatch_rival)
                     if rm_rival is not None:
                         self.rival_has_moved(rm_rival)
                     return
             self.manager_rival.stop_ponder()
-            self._engine_diag_event("play-engine-rival-ponder-miss", human_move=human_move, expected=self.ponder_move)  # 仅调试用
             self.ponder_move = ""
 
         mode = getattr(self, "time_mode", TimeControl.TimeMode.FISCHER)
@@ -1934,8 +1884,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         )
         if rm_rival is not None:
             self.rival_has_moved(rm_rival)
-        else:
-            self._engine_diag_event("play-engine-rival-no-response", snapshot=self.manager_rival.engine_snapshot())  # 仅调试用
 
     def dispatch_rival(self, rm: EngineResponse.EngineResponse):
         if self.thoughtOp > -1 or self.nArrows > 0:
@@ -1951,11 +1899,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.rival_has_moved(self.main_window.dato_notify)
 
     def rival_has_moved(self, rm_rival: EngineResponse.EngineResponse) -> bool:
-        self._engine_diag_event(  # 仅调试用
-            "rival-has-moved",  # 仅调试用
-            bestmove=(f"{rm_rival.from_sq}{rm_rival.to_sq}{rm_rival.promotion}" if rm_rival else None),  # 仅调试用
-            snapshot=self.manager_rival.engine_snapshot() if self.manager_rival else None,  # 仅调试用
-        )  # 仅调试用
         if self.state == ST_PAUSE:
             return True
         self.rival_is_thinking = False
@@ -2023,7 +1966,6 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self._stop_ponder_display_timer()
         self.ponder_move = ""
         if self.manager_rival:
-            self._engine_diag_event("stop-ponder", snapshot=self.manager_rival.engine_snapshot())  # 仅调试用
             self.manager_rival.stop_ponder()
 
     def _start_ponder_display_timer(self):
@@ -2159,7 +2101,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
 
     def show_result(self):
         self.state = ST_ENDGAME
-        self._stop_rival_engine_for_end("show-result-stop-engine")  # 仅调试用
+        self._stop_rival_engine_for_end()
         self.disable_all()
         self.human_is_playing = False
         if self.timed:

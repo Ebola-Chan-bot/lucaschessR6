@@ -598,7 +598,11 @@ class EngineRun(QtCore.QObject):
                                             pass
                                         break
                             elif line.startswith("bestmove"):
-                                continue
+                                # do NOT skip bestmove while _awaiting_first_depth;
+                                # ponderhit may cause the engine to reply immediately with
+                                # bestmove before any info depth line, which would hang the
+                                # event loop forever.
+                                self._awaiting_first_depth = False
 
                         emited_depth = False
                         new_depth = 0
@@ -1031,8 +1035,13 @@ class EngineRun(QtCore.QObject):
     def ponderhit(self):
         if self.state == EngineState.PONDERING:
             self.play_time_begin = time.time()
-            self._awaiting_first_depth = True
             self._set_state(EngineState.THINKING, "ponderhit")  # 仅调试用
+            # do NOT set _awaiting_first_depth here. ponderhit continues
+            # the same search (engine won't reset to depth 1), so all subsequent
+            # info lines have high depth. _awaiting_first_depth would cause the
+            # mrm to be replaced with an empty one, and the bestmove would then
+            # be skipped by the "len(self.mrm.li_rm) == 0" guard, hanging the
+            # event loop forever.
             self._send_command("ponderhit")
 
     def play_ponder(self, run_engine_params: RunEngineParams):

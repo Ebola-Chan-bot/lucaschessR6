@@ -391,6 +391,7 @@ class WEngineExtend(QtWidgets.QDialog):
             li.insert(0, (f"<{_('By default')}>", "*"))
             self.cbBooks = Controles.CB(self, li, engine.book)
             bt_nuevo_book = Controles.PB(self, "", self.new_book, plano=False).set_icono(Iconos.Nuevo(), icon_size=16)
+            bt_nuevo_book.set_pordefecto(False)
             # # Respuesta rival
             li = (
                 (_("Always the highest percentage"), BOOK_BEST_MOVE),

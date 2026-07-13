@@ -898,7 +898,7 @@ def list_irina():
         ("Shark", _("Shark"), Iconos.Shark(), 1063),
         ("Bulldog", _("Bulldog"), Iconos.Bulldog(), 1131),
         ("Knight", _("Knight || Medieval knight"), Iconos.KnightMan(), 1200),
-        ("Eagle", _("Eagle"), Iconos.Shark(), 1298),
+        ("Eagle", _("Eagle"), Iconos.Eagle(), 1298),
         ("Steven", _("Steven"), Iconos.Steven(), 1400),
         ("Tiger", _("Tiger"), Iconos.Tiger(), 1480),
         ("Elephant", _("Elephant"), Iconos.Elephant(), 1490),

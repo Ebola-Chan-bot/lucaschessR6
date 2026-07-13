@@ -3,7 +3,6 @@ import os
 import OSEngines  # in OS folder
 
 import Code
-from Code.Z import Util
 from Code.Base.Constantes import (
     ENG_ELO,
     ENG_EXTERNAL,
@@ -18,6 +17,7 @@ from Code.Base.Constantes import (
 from Code.Competitions import ManagerElo
 from Code.Engines import Engines, EnginesMicElo, EnginesWicker
 from Code.QT import Colocacion, Columnas, Controles, Grid, Iconos, LCDialog, QTDialogs, QTMessages
+from Code.Z import Util
 
 
 def read_uci_rodent(cm):
@@ -536,6 +536,16 @@ class SelectEngines:
             return self.busca(ENG_INTERNAL, self.configuration.x_rival_inicial)
 
         return rival
+
+
+select_engines: SelectEngines | None = None
+
+
+def get_select_engines(owner):
+    global select_engines
+    if select_engines is None:
+        select_engines = SelectEngines(owner)
+    return select_engines
 
 
 class WSelectEngines(LCDialog.LCDialog):

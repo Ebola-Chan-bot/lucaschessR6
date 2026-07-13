@@ -5,7 +5,7 @@ from PySide6 import QtCore, QtWidgets
 
 import Code
 from Code.Z import Util
-from Code.Engines import Engines, WEngines
+from Code.Engines import Engines, WEngines, SelectEngines
 from Code.QT import (
     Colocacion,
     Columnas,
@@ -279,6 +279,8 @@ class WConfExternals(QtWidgets.QWidget):
             li = [eng.save() for eng in self.lista_motores]
             Util.save_pickle(Code.configuration.paths.file_external_engines(), li)
             Code.configuration.engines.reset_external()
+            if SelectEngines.select_engines is not None:
+                SelectEngines.select_engines.redo_external_engines()
 
     def grid_cambiado_registro(self, grid, row, _obj_column):
         if grid == self.grid:

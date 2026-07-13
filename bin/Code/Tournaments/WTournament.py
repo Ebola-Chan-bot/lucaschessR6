@@ -681,7 +681,7 @@ class WTournament(LCDialog.LCDialog):
 
     def eng_import(self):
         if self.internal_engines is None:
-            self.internal_engines = SelectEngines.SelectEngines(self)
+            self.internal_engines = SelectEngines.get_select_engines(self)
 
         resp = self.internal_engines.menu(self)
         if not resp:

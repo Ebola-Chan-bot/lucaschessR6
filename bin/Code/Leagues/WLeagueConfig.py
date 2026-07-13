@@ -45,7 +45,7 @@ class WLeagueConfig(LCDialog.LCDialog):
         color_3 = Code.dic_qcolors["WLEAGUECONFIG_3"]
         self.li_colors = [color_1, color_2, color_3]
 
-        self.select_engines = SelectEngines.SelectEngines(w_parent)
+        self.select_engines = SelectEngines.get_select_engines(w_parent)
 
         li_acciones = [
             (_("Save"), Iconos.GrabarFichero(), self.save),
@@ -474,4 +474,3 @@ class WLeagueConfig(LCDialog.LCDialog):
     def external_engines(self):
         w = WExternalEngines.WExternalEngines(self)
         w.exec()
-        self.select_engines.redo_external_engines()

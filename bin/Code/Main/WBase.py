@@ -866,6 +866,7 @@ class WBase(QtWidgets.QWidget):
             self.lb_rotulo3.set_text(label)
             self.lb_rotulo3.show()
         else:
+            self.lb_rotulo3.set_text("")
             self.lb_rotulo3.hide()
         return self.lb_rotulo3
 

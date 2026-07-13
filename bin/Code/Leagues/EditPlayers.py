@@ -60,7 +60,7 @@ class WEditPlayers(LCDialog.LCDialog):
     def grid_doble_click(self, _grid, row, obj_column):
         col = obj_column.key
         if col == "ENGINE":
-            select = SelectEngines.SelectEngines(self)
+            select = SelectEngines.get_select_engines(self)
             engine = select.menu(self)
             if engine:
                 player = self.li_players[row]

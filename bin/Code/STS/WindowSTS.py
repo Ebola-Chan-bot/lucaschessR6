@@ -73,7 +73,7 @@ class WRun(LCDialog.LCDialog):
         o_columns = Columnas.ListaColumnas()
         o_columns.nueva("GROUP", _("Group"), 180)
         o_columns.nueva("DONE", _("Done"), 100, align_center=True)
-        o_columns.nueva("WORK", work.ref, 160, align_center=True)
+        o_columns.nueva("WORK", work.title(), 160, align_center=True)
 
         self.dworks = self.read_works()
         self.calc_max()
@@ -210,10 +210,8 @@ class WRun(LCDialog.LCDialog):
         return None
 
     def read_work(self, work):
-        tm = '%d"' % work.seconds if work.seconds else ""
-        dp = "%d^" % work.depth if work.depth else ""
         r = Util.Record()
-        r.title = f"{work.ref} {tm}{dp}"
+        r.title = work.title()
         r.labels = []
         for ng in range(len(self.sts.groups)):
             rl = Util.Record()
@@ -560,7 +558,7 @@ class WUnSTS(LCDialog.LCDialog):
     def wk_import(self, work=None):
         if work is None or not work:
             if self.select_engines is None:
-                self.select_engines = SelectEngines.SelectEngines(self)
+                self.select_engines = SelectEngines.get_select_engines(self)
             engine = self.select_engines.menu(self)
             if not engine:
                 return None

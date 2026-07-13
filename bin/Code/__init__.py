@@ -5,7 +5,7 @@ from typing import Optional
 
 from Code.Z import Util
 
-VERSION = "R 6.0.2"
+VERSION = "R 6.0.3"
 BASE_VERSION = "C"
 
 Util.randomize()

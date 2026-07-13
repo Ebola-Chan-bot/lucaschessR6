@@ -41,7 +41,7 @@ class WSwissConfig(LCDialog.LCDialog):
         color_2 = Code.dic_qcolors["WLEAGUECONFIG_1"]
         self.li_colors = [color_1, color_2]
 
-        self.select_engines = SelectEngines.SelectEngines(w_parent)
+        self.select_engines = SelectEngines.get_select_engines(w_parent)
 
         li_acciones = [
             (_("Save"), Iconos.GrabarFichero(), self.save),
@@ -444,7 +444,6 @@ class WSwissConfig(LCDialog.LCDialog):
     def external_engines(self):
         w = WExternalEngines.WExternalEngines(self)
         w.exec()
-        self.select_engines.redo_external_engines()
 
     def change_num_opponents(self):
         n_opponents = self.swiss.num_opponents()

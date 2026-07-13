@@ -83,13 +83,10 @@ class WPolyglot(LCDialog.LCDialog):
 
         self.tb.new(_("Utilities"), Iconos.Utilidades(), self.utilities)
         self.tb.new(_("Import"), Iconos.Import8(), self.pol_import.importar)
-        # (_("Create book"), Iconos.BinBook(), self.pol_export.exportar),
-        # None,
         self.tb.new(_("Export"), Iconos.Export8(), self.pol_export.export)
 
-        ly2 = Colocacion.V().control(self.tb).control(self.grid_moves)
-
-        layout = Colocacion.H().control(self.board).otro(ly2)
+        layout_left = Colocacion.V().control(self.tb).control(self.board).margen(0)
+        layout = Colocacion.H().otro(layout_left).control(self.grid_moves).margen(3)
         self.setLayout(layout)
 
         self.restore_video()
@@ -106,6 +103,7 @@ class WPolyglot(LCDialog.LCDialog):
         self.li_moves = [FasterCode.BinMove(info_move) for info_move in self.position.get_exmoves()]
 
         li = self.db_entries.get_entries(position.fen())
+
         d_entries = {entry.move: entry for entry in li}
 
         for binmove in self.li_moves:
@@ -258,6 +256,7 @@ class WPolyglot(LCDialog.LCDialog):
         tope, = li_resp
 
         with QTMessages.one_moment_please(self):
+            # self.db_entries.remove_entries(tope)
             self.db_entries.close()
 
             conn = sqlite3.connect(self.path_lcbin)

@@ -260,9 +260,12 @@ class CreateAnalysis:
                 mrm, pos = xengine.analyze_move(game, pos, None)
             xengine.close()
 
-        tab_analysis = ControlAnalysis(self, mrm, pos, self.li_tabs_analysis[-1].number + 1, xengine)
-        self.li_tabs_analysis.append(tab_analysis)
-        return tab_analysis
+        if mrm is not None:
+            tab_analysis = ControlAnalysis(self, mrm, pos, self.li_tabs_analysis[-1].number + 1, xengine)
+            self.li_tabs_analysis.append(tab_analysis)
+            return tab_analysis
+        else:
+            return None
 
 
 def show_analysis(

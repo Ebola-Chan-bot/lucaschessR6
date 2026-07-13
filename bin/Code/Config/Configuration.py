@@ -131,7 +131,7 @@ class Configuration:
         self.x_wheel_pgn = GO_FORWARD
 
         self.x_menu_play = MENU_PLAY_BOTH
-        self.x_menu_play_config = True
+        # self.x_menu_play_config = True
 
         self.x_opacity_tool_board = 10
         self.x_position_tool_board = "T"

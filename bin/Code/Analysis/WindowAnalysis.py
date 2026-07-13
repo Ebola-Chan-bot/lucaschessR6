@@ -499,7 +499,11 @@ class WAnalisis(LCDialog.LCDialog):
         alm = WindowAnalysisParam.analysis_parameters(self, False, True, False, False)
         if alm is not None:
             tab_analysis = self.tb_analysis.create_show(self, alm)
-            self.create_analysis(tab_analysis)
+            if tab_analysis is not None:
+                self.create_analysis(tab_analysis)
+            else:
+                mens = _("Result of analysis") + "<br>" + _("None")
+                QTMessages.message(self, mens)
 
     def player_has_moved_dispatcher(self, from_sq, to_sq, promotion=""):
         game = self.active_tab.wmu.tab_analysis.get_game()

@@ -5,9 +5,10 @@ import sqlite3
 import FasterCode
 
 import Code
-from Code.Z import Util
+from Code.Base.Constantes import FEN_INITIAL
 from Code.QT import QTMessages
 from Code.SQL import UtilSQL
+from Code.Z import Util
 
 
 class DBPolyglot:
@@ -148,6 +149,53 @@ class DBPolyglot:
                 ) = row
                 li_resp.append(entry)
         return li_resp
+
+    def remove_entries(self, porc):
+        st_entries_all = set()
+        st_entries_remove = set()
+
+        def rem_entries_porc(fen):
+            li = self.get_entries(fen)
+            total = sum(entry.weight for entry in li)
+            limit = porc * total / 100
+            for entry in li:
+                rowid = entry.rowid
+                if rowid in st_entries_all:
+                    continue
+                st_entries_all.add(rowid)
+                FasterCode.set_fen(fen)
+                move = FasterCode.movepolyglot_string(entry.move)
+                FasterCode.make_move(move)
+                fen2 = FasterCode.get_fen()
+                if entry.weight <= limit:
+                    st_entries_remove.add(rowid)
+                    rem_entries_all(fen2)
+                else:
+                    rem_entries_porc(fen2)
+
+        def rem_entries_all(fen):
+            if fen == FEN_INITIAL:
+                return
+            li = self.get_entries(fen)
+            for entry in li:
+                rowid = entry.rowid
+                if rowid in st_entries_remove:
+                    continue
+                FasterCode.set_fen(fen)
+                move = FasterCode.movepolyglot_string(entry.move)
+                FasterCode.make_move(move)
+                fen2 = FasterCode.get_fen()
+                st_entries_all.add(rowid)
+                st_entries_remove.add(rowid)
+                rem_entries_all(fen2)
+
+        rem_entries_porc(FEN_INITIAL)
+        sql = "DELETE FROM BOOK WHERE rowid = ?"
+        for rowid in st_entries_remove:
+            self.conexion.execute(sql, (rowid,))
+        self.conexion.commit()
+
+        return len(st_entries_remove)
 
     def get_all(self):
         sql = "SELECT DISTINCT length(CKEY) FROM BOOK"

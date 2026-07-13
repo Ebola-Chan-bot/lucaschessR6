@@ -74,7 +74,7 @@ class WPlayAgainstEngine(LCDialog.LCDialog):
 
         self.personalidades = Personalities.Personalities(self, self.configuration)
 
-        self.select_engines = SelectEngines.SelectEngines(procesador.main_window)
+        self.select_engines = SelectEngines.get_select_engines(procesador.main_window)
 
         self.list_books = Books.ListBooks()
 
@@ -144,9 +144,9 @@ class WPlayAgainstEngine(LCDialog.LCDialog):
             self.tb.clear()
         self.tb.new(f"&{_('Accept')}", Iconos.Aceptar(), self.aceptar)
         self.tb.new(_("Cancel"), Iconos.Cancelar(), self.cancelar)
+        self.tb.new(_("Configurations"), Iconos.Configurar(), self.maintenance_configurations)
         if len(self.read_configurations()) > 0:
             self.tb.new(_("Restore"), Iconos.Engine2(), self.restore_configuration)
-        self.tb.new(_("Save"), Iconos.SaveAs(), self.maintenance_configurations)
         self.tb.new(_("Engines configuration"), Iconos.ConfEngines(), self.conf_engines)
         self.tb.new(_("External engines"), Iconos.Engine(), self.external_engines)
 
@@ -751,13 +751,11 @@ class WPlayAgainstEngine(LCDialog.LCDialog):
         w = WConfEngines.WConfEngines(self)
         w.exec()
         self.changed_strength()
-        self.select_engines.redo_external_engines()
 
     def external_engines(self):
         w = WExternalEngines.WExternalEngines(self)
         w.exec()
         self.changed_strength()
-        self.select_engines.redo_external_engines()
 
     def grid_num_datos(self, _grid):
         return len(self.rival.li_uci_options_editable()) if self.tab_advanced_active else 0
@@ -1799,7 +1797,7 @@ class WCambioRival(QtWidgets.QDialog):
         self.rb_black = Controles.RB(self, _("Black"))
 
         # Motores
-        self.select_engines = SelectEngines.SelectEngines(w_parent)
+        self.select_engines = SelectEngines.get_select_engines(w_parent)
 
         li_depths = [("--", 0)]
         for x in range(1, 31):

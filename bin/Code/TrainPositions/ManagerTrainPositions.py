@@ -905,3 +905,13 @@ class ManagerTrainPositions(Manager.Manager):
         else:
             with_help = False
         self.pon_help(with_help)
+
+    def change_tutor_active(self):
+        previous = self.is_tutor_enabled
+        self.is_tutor_enabled = not previous
+        self.set_activate_tutor(self.is_tutor_enabled)
+        if previous:
+            self.analyze_end()
+        elif self.human_is_playing:
+            self.analyze_begin()
+

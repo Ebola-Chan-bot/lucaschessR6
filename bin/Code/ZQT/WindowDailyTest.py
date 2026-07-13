@@ -341,6 +341,13 @@ class WDailyTest(LCDialog.LCDialog):
             return Code.dic_qcolors["PGN_SELBACKGROUND"]
         return None
 
+    def grid_cambiado_registro(self, _grid, row, _obj_column):
+        rm: EngineResponse.EngineResponse = self.mrm.li_rm[row]
+        position: Position.Position = self.position.copia()
+        position.play_pv(rm.movimiento())
+        self.board.set_position(position)
+        self.board.put_arrow_sc(rm.from_sq, rm.to_sq)
+
     def finalize(self):
         self.manager_analysis.close()
         self.save_video()

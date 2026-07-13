@@ -41,6 +41,8 @@ class TimeControl:
         self.time_paused = 0.0
         self.time_previous = 0.0
 
+        self.is_first_move = False
+
         self.pending_time_initial = 0
 
         self.set_clock_side = window.set_clock_white if side else window.set_clock_black
@@ -92,6 +94,10 @@ class TimeControl:
         self.seconds_per_move = float(increment_secs)
         self.zeitnot_marker = zeitnot
         self.show_clock = True
+
+        self.is_first_move = len(self.game) == 0
+        if self.is_first_move:
+            self.pending_time += self.seconds_per_move
 
     def config_bronstein(self, base_secs, delay_secs, zeitnot=0):
         """
@@ -254,6 +260,9 @@ class TimeControl:
 
             if self.time_mode == TIMEMODE_FISCHER:
                 self.pending_time -= t_used - self.seconds_per_move
+                if self.is_first_move:
+                    self.is_first_move = False
+                    self.pending_time -= self.seconds_per_move
 
             elif self.time_mode == TIMEMODE_BRONSTEIN:
                 # Solo se recupera el tiempo si el turno duró menos que el delay

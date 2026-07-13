@@ -100,7 +100,7 @@ class Procesador:
     manager_analyzer: EngineManagerAnalysis.EngineManagerAnalysis | None
     in_the_presentation: bool
     initial_position: Position.Position
-    kibitzers_manager: KibitzersManager.Manager
+    kibitzers_manager: KibitzersManager.Manager = None
     cpu: CPU.CPU
     manager_rival = None
 
@@ -737,6 +737,9 @@ class Procesador:
         with_previous_next=None,
         save_routine=None,
     ):
+        if self.kibitzers_manager is None:
+            self.kibitzers_manager = KibitzersManager.Manager(self)
+
         clon_procesador = ProcesadorVariations(
             window,
             self.manager_tutor,

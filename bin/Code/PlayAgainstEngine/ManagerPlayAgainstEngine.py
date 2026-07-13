@@ -747,7 +747,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
         self.base_inicio(dic)
         self.reinicio["play_position"] = dic, restore_game
         w, b = self.player_name, self.rival_name
-        if self.is_human_side_white:
+        if not self.is_human_side_white:
             w, b = b, w
         for tag, value in self.game.li_tags:
             if not game.get_tag(tag):
@@ -908,6 +908,8 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             self.state = ST_ENDGAME
             self.manager_tutor.close()
             self.manager_rival.close()
+            self.remove_label3()
+            self.board.remove_movables()
 
         if len(self.game) > 0:
             if not QTMessages.pregunta(self.main_window, _("End game?")):
@@ -1096,6 +1098,16 @@ class ManagerPlayAgainstEngine(Manager.Manager):
     def analyze_changedepth(self, mrm: EngineResponse.MultiEngineResponse):
         if self.is_tutor_analysing:
             self.mrm_tutor = mrm
+            if self.tutor_con_flechas:
+                rm = mrm.best_rm_ordered()
+                if rm:
+                    if self.nArrows:
+                        self.last_time_show_arrows = time.time()
+                        self.show_pv(rm.pv, self.nArrowsTt)
+                    if self.thoughtTt > -1:
+                        self.show_dispatch(self.thoughtTt, rm)
+
+                pass
 
     def analyze_end(self):
         if self.is_tutor_analysing:

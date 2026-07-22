@@ -612,30 +612,33 @@ class WBase(QtWidgets.QWidget):
                 break
 
         if move.analysis:
-            mrm, pos = move.analysis
-            rm = mrm.li_rm[pos]
-            mate = rm.mate
-            is_white = move.position_before.is_white
-            if mate:
-                if mate == 1:
-                    info = ""
+            try:
+                mrm, pos = move.analysis
+                rm = mrm.li_rm[pos]
+                mate = rm.mate
+                is_white = move.position_before.is_white
+                if mate:
+                    if mate == 1:
+                        info = ""
+                    else:
+                        if not is_white:
+                            mate = -mate
+                        if (mate > 1) and is_white:
+                            mate -= 1
+                        elif (mate < -1) and not is_white:
+                            mate += 1
+
+                        info = "M%+d" % mate
                 else:
+                    pts = rm.puntos
                     if not is_white:
-                        mate = -mate
-                    if (mate > 1) and is_white:
-                        mate -= 1
-                    elif (mate < -1) and not is_white:
-                        mate += 1
+                        pts = -pts
+                    info = f"{pts / 100.0:+0.2f}"
 
-                    info = "M%+d" % mate
-            else:
-                pts = rm.puntos
-                if not is_white:
-                    pts = -pts
-                info = f"{pts / 100.0:+0.2f}"
-
-            if color_nag == NAG_0:  # Son prioritarios los nags manuales
-                nothing, color_nag = mrm.set_nag_color(rm)
+                if color_nag == NAG_0:  # Son prioritarios los nags manuales
+                    nothing, color_nag = mrm.set_nag_color(rm)
+            except AttributeError:
+                pass
 
         is_opening = move.in_the_opening
 

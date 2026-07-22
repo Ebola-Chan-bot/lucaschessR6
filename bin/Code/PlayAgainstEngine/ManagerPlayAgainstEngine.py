@@ -1101,7 +1101,7 @@ class ManagerPlayAgainstEngine(Manager.Manager):
             if self.tutor_con_flechas:
                 rm = mrm.best_rm_ordered()
                 if rm:
-                    if self.nArrows:
+                    if self.nArrowsTt:
                         self.last_time_show_arrows = time.time()
                         self.show_pv(rm.pv, self.nArrowsTt)
                     if self.thoughtTt > -1:
@@ -1681,6 +1681,12 @@ class ManagerPlayAgainstEngine(Manager.Manager):
                 # Moves-in-time: pass current pending time; increment from
                 # current phase bonus (stored as seconds_per_move after a phase ends)
                 seconds_move = tc_engine.seconds_per_move
+
+            elif mode == TIMEMODE_FISCHER:
+                if self.tc_rival.is_first_move:
+                    seconds_move = 0
+                else:
+                    seconds_move = tc_engine.seconds_per_move
 
             else:
                 # Fischer / Sudden Death / fallback

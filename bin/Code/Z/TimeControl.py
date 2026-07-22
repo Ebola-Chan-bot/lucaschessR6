@@ -9,13 +9,13 @@ from Code.Z import Util
 # 
 # SUDDEN_DEATH   : Tiempo fijo, sin incremento. Se acaba → pierde.
 #                  Ej: 5min, 10min, 30min
-# FISCHER        : Tiempo base + incremento por jugada (ya implementado como seconds_per_move).
+# FISCHER        : Tiempo base + incremento por jugada.
 #                  Ej: 5min + 3s/mov  (el más común en online)
-# BRONSTEIN      : El incremento solo se devuelve si no se usó todo el tiempo del turno.
+# BRONSTEIN      : El incremento solo se devuelve si no se usó xtodo el tiempo del turno.
 #                  A diferencia de Fischer, el reloj nunca supera el tiempo inicial del turno.
 #                  Ej: 5min + 3s Bronstein
 # DELAY_SIMPLE   : Cuenta atrás se retrasa N segundos antes de empezar a correr.
-#                  Usado en torneos OTB (over the board) americanos.
+#                  Usado en torneos OTB (over the board) americanos. No se acumula el tiempo no gastado del delay.
 #                  Ej: 30min + 5s delay
 # HOURGLASS      : El tiempo que gasta un jugador se añade al reloj del rival.
 #                  Ej: ambos con 5min, se transfiere segundo a segundo.
@@ -95,7 +95,7 @@ class TimeControl:
         self.zeitnot_marker = zeitnot
         self.show_clock = True
 
-        self.is_first_move = len(self.game) == 0
+        self.is_first_move = len(self.game) == 0 and self.pending_time == 0
         if self.is_first_move:
             self.pending_time += self.seconds_per_move
 

@@ -228,6 +228,9 @@ class DBPolyglot:
     def commit(self):
         self.conexion.commit()
 
+    def pack(self):
+        self.conexion.execute("VACUUM")
+
 
 class IndexPolyglot:
     def __init__(self):

@@ -502,7 +502,7 @@ class WAnalisis(LCDialog.LCDialog):
             if tab_analysis is not None:
                 self.create_analysis(tab_analysis)
             else:
-                mens = _("Result of analysis") + "<br>" + _("None")
+                mens = _("Result of analysis") + ":<br>" + _("None")
                 QTMessages.message(self, mens)
 
     def player_has_moved_dispatcher(self, from_sq, to_sq, promotion=""):

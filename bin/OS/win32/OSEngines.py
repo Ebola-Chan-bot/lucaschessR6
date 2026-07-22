@@ -67,7 +67,7 @@ def read_engines(folder_engines):
     cm.set_uci_option("Hash", "32")
     cm.set_min_fixed_depth(2)
 
-    mas("bikjump", "Aart J.C. Bik", "2.01 (32-bit)", "https://www.aartbik.com/strategy.php", "bikjump.exe", 2026)
+    mas("bikjump", "Aart J.C. Bik", "2.01 (32-bit)", "https://www.aartbik.com/strategy.php", "bikjump.exe", 2061)
 
     cm = mas(
         "clarabit",
@@ -80,7 +80,7 @@ def read_engines(folder_engines):
     )
     cm.set_uci_option("OwnBook", "false")
 
-    mas("lime", "Richard Allbert", "v 66", "https://www.geocities.com/taciturn_lemon", "Lime_v66.exe", 2119)
+    mas("lime", "Richard Allbert", "v 66", "https://www.geocities.com/taciturn_lemon", "Lime_v66.exe", 2131)
 
     cm = mas(
         "chispa",
@@ -294,9 +294,9 @@ def read_engines(folder_engines):
 
     mas("greko", "Vladimir Medvedev", "12.9", "https://sourceforge.net/projects/greko", "GreKo.exe", 2508)
 
-    mas("delfi", "Fabio Cavicchio", "5.4", "https://www.msbsoftware.it/delfi/", "delfi.exe", 2686, emulate_movetime=True)
+    mas("delfi", "Fabio Cavicchio", "5.4", "https://www.msbsoftware.it/delfi/", "delfi.exe", 2695, emulate_movetime=True)
 
-    mas("monarch", "Steve Maughan", "1.7", "https://www.monarchchess.com/", "Monarch(v1.7).exe", 2100)
+    mas("monarch", "Steve Maughan", "1.7", "https://www.monarchchess.com/", "Monarch(v1.7).exe", 1985)
 
     mas(
         "andscacs",
@@ -361,7 +361,7 @@ def read_engines(folder_engines):
     )
 
     mas(
-        "cdrill",
+        "cdrill2000",
         "Ferdinand Mosca",
         "2000",
         "https://sites.google.com/view/cdrill",

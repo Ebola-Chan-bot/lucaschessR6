@@ -280,6 +280,7 @@ class WPolyglot(LCDialog.LCDialog):
             conn.close()
 
             self.db_entries = DBPolyglot.DBPolyglot(self.path_lcbin)
+            self.db_entries.pack()
             self.set_position(self.position, True)
 
         QTMessages.message(self, f'{_("Deleted records")}: {regs_removed}')

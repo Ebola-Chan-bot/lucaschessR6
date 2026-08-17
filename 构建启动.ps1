@@ -377,7 +377,9 @@ $二进制目录 = Join-Path $仓库根目录 'bin'
 $快码目录 = Join-Path $二进制目录 '_fastercode'
 $快码源码目录 = Join-Path $快码目录 'src'
 $伊里娜目录 = Join-Path $快码源码目录 'irina'
-$视窗系统目录 = Join-Path $二进制目录 'OS\win32'
+# 合并 main(R6.0.4) 后，bin/Code/__init__.py 使用 platform = "windows"，
+# 即应用从 bin/OS/windows 目录加载 FasterCode 扩展（与上游构建 bat 一致）
+$视窗系统目录 = Join-Path $二进制目录 'OS\windows'
 $视窗构建脚本 = Join-Path $快码源码目录 'setup_windows.py'
 $合并后的Pyx = Join-Path $快码源码目录 'FasterCode.pyx'
 $临时头文件 = Join-Path $快码源码目录 'irina.h'
@@ -446,7 +448,7 @@ $清理命令 = 'del /q ' + ($目标文件列表 -join ' ')
     "`"$($Python信息.executable)`" `"$视窗构建脚本`" build_ext --inplace"
 ) -失败提示 '构建 FasterCode 扩展失败'
 
-输出步骤 '复制构建好的 FasterCode 模块到 bin/OS/win32'
+输出步骤 '复制构建好的 FasterCode 模块到 bin/OS/windows'
 $已构建模块 = Get-ChildItem -Path $快码源码目录 -Filter 'FasterCode*.pyd' | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if (-not $已构建模块) {
     throw 'FasterCode 构建完成但没有生成 .pyd 文件'
@@ -469,14 +471,18 @@ if ($是否复制过头文件) {
 }
 
 if (-not $跳过冒烟测试) {
-    输出步骤 '执行 FasterCode 导入冒烟测试'
+    输出步骤 '执行冒烟测试（导入完整启动链路）'
+    # 必须导入 Code.Main.Init：它会级联加载 Procesador 及全部模块，
+    # 仅 import Code 只触发包级 __init__，无法发现深层模块的接口错配（如缺常量等）。
     $冒烟脚本 = @'
 import sys
 sys.path.insert(0, r"bin")
 sys.argv = [r"bin\\LucasR.py", "-healthcheck"]
+
 import Code
 import FasterCode
-print("FasterCode import OK")
+import Code.Main.Init
+print("冒烟测试 OK：Code.Main.Init / FasterCode 导入成功")
 '@
     $临时冒烟文件 = Join-Path $env:TEMP "lucaschess_smoke_$([guid]::NewGuid().ToString('N')).py"
     Set-Content -Path $临时冒烟文件 -Value $冒烟脚本 -Encoding UTF8

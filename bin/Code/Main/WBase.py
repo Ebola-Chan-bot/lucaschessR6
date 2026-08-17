@@ -182,9 +182,9 @@ class WBase(QtWidgets.QWidget):
             self.dic_toolbar[key] = action
 
         action = self.dic_toolbar[TB_NEXT]
-        action.setToolTip(f'{_("Next")}: [+, {_("Page Down")}]')
+        action.setToolTip(f"{_('Next')}: [+, {_('Page Down')}]")
         action = self.dic_toolbar[TB_PREVIOUS]
-        action.setToolTip(f'{_("Previous")}: [-, {_("Page Up")}]')
+        action.setToolTip(f"{_('Previous')}: [-, {_('Page Up')}]")
 
     def translate_again_tb(self):
         dic_opciones = self.dic_opciones_tb()
@@ -355,7 +355,7 @@ class WBase(QtWidgets.QWidget):
             Controles.PB(self, self.captures_symbol(), self.captures_mouse_pressed).set_font_type(puntos=14)
         ).relative_width(10)
 
-        width_pgn = self.pgn.width_columns_displayables() + 18
+        width_pgn = self.pgn.width_and_vbar()
         n_ancho_capt = (width_pgn - self.bt_capt.width() - 2) // 2
         self.lb_capt_white.setFixedWidth(n_ancho_capt)
         self.lb_capt_black.setFixedWidth(n_ancho_capt)
@@ -494,7 +494,7 @@ class WBase(QtWidgets.QWidget):
         return self.tb.li_acciones
 
     def is_enabled_option_toolbar(self, kopcion):
-        return kopcion in self.dic_toolbar and self.dic_toolbar[kopcion].isEnabled()
+        return kopcion in self.tb.li_acciones and self.dic_toolbar[kopcion].isEnabled()
 
     def enable_option_toolbar(self, kopcion, activate):
         if kopcion in self.dic_toolbar:
@@ -562,8 +562,7 @@ class WBase(QtWidgets.QWidget):
             col_white.ancho = new_width
             col_black.ancho = new_width
             self.pgn.set_widths_columns()
-            n_ancho_pgn = self.pgn.width_columns_displayables() + 18
-            self.pgn.setMinimumWidth(n_ancho_pgn)
+            n_ancho_pgn = self.pgn.fix_min_width()
             self.manager.configuration.x_pgn_width = n_ancho_pgn
             self.manager.configuration.graba()
             n_ancho_labels = n_ancho_pgn // 2 - 1
@@ -613,30 +612,33 @@ class WBase(QtWidgets.QWidget):
                 break
 
         if move.analysis:
-            mrm, pos = move.analysis
-            rm = mrm.li_rm[pos]
-            mate = rm.mate
-            is_white = move.position_before.is_white
-            if mate:
-                if mate == 1:
-                    info = ""
+            try:
+                mrm, pos = move.analysis
+                rm = mrm.li_rm[pos]
+                mate = rm.mate
+                is_white = move.position_before.is_white
+                if mate:
+                    if mate == 1:
+                        info = ""
+                    else:
+                        if not is_white:
+                            mate = -mate
+                        if (mate > 1) and is_white:
+                            mate -= 1
+                        elif (mate < -1) and not is_white:
+                            mate += 1
+
+                        info = "M%+d" % mate
                 else:
+                    pts = rm.puntos
                     if not is_white:
-                        mate = -mate
-                    if (mate > 1) and is_white:
-                        mate -= 1
-                    elif (mate < -1) and not is_white:
-                        mate += 1
+                        pts = -pts
+                    info = f"{pts / 100.0:+0.2f}"
 
-                    info = "M%+d" % mate
-            else:
-                pts = rm.puntos
-                if not is_white:
-                    pts = -pts
-                info = f"{float(pts / 100.0):+0.2f}"
-
-            if color_nag == NAG_0:  # Son prioritarios los nags manuales
-                nothing, color_nag = mrm.set_nag_color(rm)
+                if color_nag == NAG_0:  # Son prioritarios los nags manuales
+                    nothing, color_nag = mrm.set_nag_color(rm)
+            except AttributeError:
+                pass
 
         is_opening = move.in_the_opening
 
@@ -867,6 +869,7 @@ class WBase(QtWidgets.QWidget):
             self.lb_rotulo3.set_text(label)
             self.lb_rotulo3.show()
         else:
+            self.lb_rotulo3.set_text("")
             self.lb_rotulo3.hide()
         return self.lb_rotulo3
 
@@ -878,12 +881,12 @@ class WBase(QtWidgets.QWidget):
 
     def set_clock_white(self, tm, tm2):
         if tm2 is not None:
-            tm += f"<br><FONT SIZE=\"-4\">{tm2}"
+            tm += f'<br><FONT SIZE="-4">{tm2}'
         self.lb_clock_white.set_text(tm)
 
     def set_clock_black(self, tm, tm2):
         if tm2 is not None:
-            tm += f"<br><FONT SIZE=\"-4\">{tm2}"
+            tm += f'<br><FONT SIZE="-4">{tm2}'
         self.lb_clock_black.set_text(tm)
 
     def hide_clock_white(self):

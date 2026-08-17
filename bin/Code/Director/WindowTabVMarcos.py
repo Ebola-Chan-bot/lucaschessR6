@@ -27,7 +27,7 @@ class WTVMarco(QtWidgets.QDialog):
             reg_marco = TabVisual.PMarco()
 
         tb = QTDialogs.LCTB(self)
-        tb.new(_("Save"), Iconos.Aceptar(), self.grabar),
+        (tb.new(_("Save"), Iconos.Aceptar(), self.grabar),)
         tb.new(_("Cancel"), Iconos.Cancelar(), self.reject)
 
         # Board
@@ -276,7 +276,7 @@ class WTVMarcos(LCDialog.LCDialog):
             reg_marco.name = name
             reg_marco.id = Util.huella()
             reg_marco.ordenVista = self.liPMarcos[-1].ordenVista + 1
-            self.db_marcos[reg_marco.id] = reg_marco
+            self.db_marcos[reg_marco.id] = reg_marco.save_dic()
             self.liPMarcos.append(reg_marco)
             self.grid.refresh()
             self.grid.setFocus()

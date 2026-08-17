@@ -17,6 +17,7 @@ from Code.Base.Constantes import (
     GT_TACTICS,
     GT_VARIATIONS,
     GT_WICKER,
+    GT_GRID,
     ST_ENDGAME,
     TB_EBOARD,
 )
@@ -30,23 +31,11 @@ class ManagerAnalysis:
         self.configuration = manager.configuration
         self.game = manager.game
         self.procesador = manager.procesador
-        self.manager_tutor = self.procesador.get_manager_tutor()
-        self.manager_analyzer = self.procesador.get_manager_analyzer()
 
-    # def analyze_with_tutor(self, with_cursor=False):
-    #     if with_cursor:
-    #         self.main_window.pensando_tutor(True)
-    #     self.manager.thinking(True)
-    #     fen = self.game.last_position.fen()
-    #     if not self.manager.is_finished():
-    #         self.manager.mrm_tutor = self.manager_tutor.analiza(fen)
-    #     else:
-    #         self.manager.mrm_tutor = None
-    #     self.manager.thinking(False)
-    #     if with_cursor:
-    #         self.main_window.pensando_tutor(False)
-    #     return self.manager.mrm_tutor
-    #
+    @property
+    def manager_analyzer(self):
+        return self.manager.manager_analyzer
+
     def analize_after_last_move(self):
         mens = _("Analyzing the move....")
         self.main_window.base.show_message(mens, True, tit_cancel=_("Stop thinking"))
@@ -103,7 +92,7 @@ class ManagerAnalysis:
                     GT_OPENINGS,
                     GT_TACTICS,
                 ]
-                or (self.manager.game_type in [GT_ELO, GT_MICELO, GT_WICKER] and not self.manager.is_competitive)
+                or (self.manager.game_type in [GT_ELO, GT_MICELO, GT_WICKER, GT_GRID] and not self.manager.is_competitive)
             ):
                 if si_ultimo or self.manager.hints == 0:
                     return
@@ -119,14 +108,14 @@ class ManagerAnalysis:
                         return False
                     else:
                         self.main_window.base.change_message(
-                            f'{mens}<br><small>{_("Depth")}: {rm.depth} {_("Time")}: {ms / 1000:.01f}'
+                            f"{mens}<br><small>{_('Depth')}: {rm.depth} {_('Time')}: {ms / 1000:.01f}"
                         )
                     return True
 
-                dispacher = test_me
+                dispatcher = test_me
             else:
-                dispacher = None
-            mrm, pos = self.manager_analyzer.analyze_move(self.manager.game, pos_jg, dispacher=dispacher)
+                dispatcher = None
+            mrm, pos = self.manager_analyzer.analyze_move(self.manager.game, pos_jg, dispatcher=dispatcher)
             ok = pos >= 0
             if ok:
                 move.analysis = mrm, pos
@@ -160,7 +149,7 @@ class ManagerAnalysis:
 
     def show_analysis(self):
         with QTMessages.one_moment_please(self.main_window):
-            self.manager.game.assign_isbook_phases()
+            self.manager.game.assign_phases()
             elos = self.manager.game.calc_elos()
             alm = Histogram.gen_histograms(self.manager.game)
             (
@@ -178,7 +167,7 @@ class ManagerAnalysis:
         if len(alm.lijg) == 0:
             QTMessages.message(self.main_window, _("There are no analyzed moves."))
         else:
-            WindowAnalysisGraph.show_graph(self.main_window, self.manager, alm, Analysis.show_analysis)
+            WindowAnalysisGraph.show_graph(self.main_window, self.manager, alm)
 
     def refresh_analysis(self):
         if not self.manager.game:

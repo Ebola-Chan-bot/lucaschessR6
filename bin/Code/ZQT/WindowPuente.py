@@ -1,4 +1,3 @@
-import atexit
 import datetime
 import random
 import time
@@ -34,8 +33,6 @@ class PuenteHistorico:
         self.calcula_media()
 
         self.orden = "FECHA", "DESC"
-
-        atexit.register(self.close)
 
     def close(self):
         if self.dbf:
@@ -195,7 +192,7 @@ class WEdMove(QtWidgets.QWidget):
 
         to_sq = self.destino.texto()
         if len(to_sq) != 2:
-            from_sq = ""
+            to_sq = ""
 
         return from_sq, to_sq, self.promocion.strip()
 
@@ -303,7 +300,7 @@ class WPuenteBase(LCDialog.LCDialog):
         o_columns.nueva("FECHA", _("Date"), 120, align_center=True)
         o_columns.nueva("SEGUNDOS", _("Second(s)"), 120, align_center=True)
         self.ghistorico = Grid.Grid(self, o_columns, complete_row_select=True, select_multiple=True)
-        self.ghistorico.setMinimumWidth(self.ghistorico.width_columns_displayables() + 20)
+        self.ghistorico.fix_min_width()
 
         # Tool bar
         self.tb = Controles.TBrutina(self)

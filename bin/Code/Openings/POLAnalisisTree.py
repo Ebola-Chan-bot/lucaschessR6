@@ -56,7 +56,7 @@ class LabelTreeDelegate(QtWidgets.QStyledItemDelegate):
         painter.drawLine(x, ny, rect.width() + x, ny)
         painter.restore()
 
-        if option.state & QtWidgets.QStyle.State_Selected:
+        if option.state & QtWidgets.QStyle.StateFlag.State_Selected:
             painter.fillRect(rect, Code.dic_qcolors["PGN_SELBACKGROUND"])
             color = Code.dic_colors["PGN_SELFOREGROUND"]
         else:
@@ -130,6 +130,7 @@ class TreeMoves(QtWidgets.QTreeWidget):
     def __init__(self, owner):
         QtWidgets.QTreeWidget.__init__(self, owner)
         self.owner = owner
+        Code.configuration.set_property(self, "102")
 
     def mousePressEvent(self, event):
         QtWidgets.QTreeWidget.mousePressEvent(self, event)
@@ -269,7 +270,7 @@ class TabTree(QtWidgets.QWidget):
     def set_data(self, data, pv):
         pass
 
-    def menu_context(self, position):
+    def menu_context(self, _position):
         item = self.tree.currentItem()
         if not item:
             return
@@ -316,14 +317,11 @@ class TabTree(QtWidgets.QWidget):
         if resp == "remove":
             self.remove_branch(item)
             return
-        if resp.startswith("delbranches"):
-            self.delbranches_num(item, "white" in resp)
-            return
         if resp == "create":
             self.create_from_branch(item)
             return
         if resp == "analysis":
-            self.tabsAnalisis.panelOpening.grid_doble_click(None, None, None)
+            self.wlines.grid_doble_click(None, None, None)
             return
 
         quien = si_expand = None
@@ -411,10 +409,10 @@ class TabTree(QtWidgets.QWidget):
         filename = Util.valid_filename(name)
         if filename.endswith(".opk"):
             filename = filename[:-4]
-        list_openings = OpeningLines.ListaOpenings()
+        list_openings = OpeningLines.ListaOpenings(False)
         path_opening = Util.opj(list_openings.folder, f"{filename}.opk")
         if os.path.isfile(path_opening):
-            QTMessages.message_error(self, f"{_('This file already exists')}\n{f"{filename}.opk"}")
+            QTMessages.message_error(self, f"{_('This file already exists')}\n{f'{filename}.opk'}")
             return
         with QTMessages.one_moment_please(self):
             dbop_current: OpeningLines.Opening = self.tabsAnalisis.dbop
@@ -430,7 +428,7 @@ class TabTree(QtWidgets.QWidget):
         lipv = data_item.list_pv()
         a1h8 = " ".join(lipv)
         pgn = data_item.game_translated()
-        if not self.tabsAnalisis.panelOpening.remove_pv(pgn, a1h8):
+        if not self.wlines.remove_pv(pgn, a1h8):
             return
 
         parent = item.parent()

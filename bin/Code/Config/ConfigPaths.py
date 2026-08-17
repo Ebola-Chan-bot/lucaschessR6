@@ -16,7 +16,7 @@ class ConfigPaths:
         if user:
             self.userdata_folder = Util.opj(self.userdata_folder, "users", str(user.number))
             if not os.path.isdir(self.userdata_folder):
-                Util.create_folder(self.userdata_folder)
+                Util.check_folders(self.userdata_folder)
 
         self.file = self._to_config("lk.pk2")
         self.is_first_time = not Util.exist_file(self.file)
@@ -204,6 +204,9 @@ class ConfigPaths:
     def file_estad_elo(self):
         return self._to_results("estad.pkli")
 
+    def file_estad_grid_elo(self):
+        return self._to_results("estadGrid.pkli")
+
     def file_estad_mic_elo(self):
         return self._to_results("estadMic.pkli")
 
@@ -329,11 +332,14 @@ class ConfigPaths:
 
     def folder_openings(self):
         dic = self.configuration.read_variables("OPENING_LINES")
-        folder = dic.get("FOLDER", self.folder_base_openings())
-        return folder if os.path.isdir(folder) else self.folder_base_openings
+        folder_rel = dic.get("FOLDER", "")
+        if folder_rel:
+            folder = os.path.join(self.folder_base_openings(), folder_rel)
+        else:
+            folder = self.folder_base_openings()
+        return folder if os.path.isdir(folder) else self.folder_base_openings()
 
     def set_folder_openings(self, new_folder):
-        new_folder = Util.relative_path(os.path.realpath(new_folder))
         dic = self.configuration.read_variables("OPENING_LINES")
         dic["FOLDER"] = new_folder
         self.configuration.write_variables("OPENING_LINES", dic)

@@ -4,15 +4,19 @@ El grid es un TableView de QT.
 Realiza llamadas a rutinas de la ventana donde esta ante determinados eventos, o en determinadas situaciones,
 siempre que la rutina se haya definido en la ventana:
 
-    - grid_doubleclick_header : ante un doble click en la head, normalmente se usa para la reordenacion de la tabla por la column pulsada.
+    - grid_doubleclick_header : ante un doble click en la head, normalmente se usa para la reordenacion de la tabla por
+    la column pulsada.
     - grid_tecla_pulsada : al pulsarse una tecla, llama a esta rutina, para que pueda usarse por ejemplo en busquedas.
-    - grid_tecla_control : al pulsarse una tecla de control, llama a esta rutina, para que pueda usarse por ejemplo en busquedas.
+    - grid_tecla_control : al pulsarse una tecla de control, llama a esta rutina, para que pueda usarse por ejemplo en
+    busquedas.
     - grid_doble_click : en el caso de un doble click en un registro, se hace la llamad a esta rutina
     - grid_right_button : si se ha pulsado el boton derecho del raton.
     - grid_setvalue : si hay un campo editable, la llamada se produce cuando se ha cambiado el valor tras la edicion.
 
-    - grid_color_texto : si esta definida se la llama al mostrar el texto de un campo, para determinar el color del mismo.
-    - grid_color_fondo : si esta definida se la llama al mostrar el texto de un campo, para determinar el color del fondo del mismo.
+    - grid_color_texto : si esta definida se la llama al mostrar el texto de un campo, para determinar el color del
+    mismo.
+    - grid_color_fondo : si esta definida se la llama al mostrar el texto de un campo, para determinar el color del
+    fondo del mismo.
 
 """
 
@@ -152,7 +156,8 @@ class ControlGrid(QtCore.QAbstractTableModel):
 
     def setData(self, index, valor, role=QtCore.Qt.ItemDataRole.EditRole):
         """
-        Tras producirse la edicion de un campo en un registro se llama a esta rutina para cambiar el valor en el origen de los datos.
+        Tras producirse la edicion de un campo en un registro se llama a esta rutina para cambiar el valor en el origen
+        de los datos.
         Se lanza grid_setvalue en la ventana propietaria.
         """
         if not index.isValid():
@@ -321,6 +326,7 @@ class Grid(QtWidgets.QTableView):
         self.setModel(self.cg)
         self.setShowGrid(with_lines)
         self.setWordWrap(False)
+
         self.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
 
         if background is not None:
@@ -375,7 +381,7 @@ class Grid(QtWidgets.QTableView):
         if self.w_parent.grid_num_datos(self) > 20000:
             if not QTMessages.pregunta(
                     self,
-                    f'{_("This process takes a very long time")}.<br><br>{_("What do you want to do?")}',
+                    f"{_('This process takes a very long time')}.<br><br>{_('What do you want to do?')}",
                     label_yes=_("Continue"),
                     label_no=_("Cancel"),
             ):
@@ -423,6 +429,9 @@ class Grid(QtWidgets.QTableView):
         is_shift = (m & QtCore.Qt.KeyboardModifier.ShiftModifier.value) > 0
         is_control = (m & QtCore.Qt.KeyboardModifier.ControlModifier.value) > 0
         is_alt = (m & QtCore.Qt.KeyboardModifier.AltModifier.value) > 0
+
+        if is_alt and k == QtCore.Qt.Key.Key_R:
+            self.resize_columns()
 
         if hasattr(self.w_parent, "grid_tecla_pulsada"):
             if not (is_control or is_alt) and k < 256:
@@ -585,9 +594,18 @@ class Grid(QtWidgets.QTableView):
 
         return sum(self.columnWidth(i) for i in range(len(columnas)))
 
+    def width_and_vbar(self):
+        width_vbar = self.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_ScrollBarExtent)
+        return self.width_columns_displayables() + width_vbar + 6
+
     def fix_min_width(self):
-        n_ancho = self.width_columns_displayables() + 24
+        n_ancho = self.width_and_vbar()
         self.setMinimumWidth(n_ancho)
+        return n_ancho
+
+    def fix_width(self):
+        n_ancho = self.width_and_vbar()
+        self.setFixedWidth(n_ancho)
         return n_ancho
 
     def recno(self):
@@ -687,3 +705,76 @@ class Grid(QtWidgets.QTableView):
             vh.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Fixed)
             vh.setDefaultSectionSize(heigh_row)
             vh.setVisible(self.with_header_vertical)
+
+    def resize_columns(self):
+        with QTMessages.one_moment_please(self, _("Resizing")):
+            self.resizeColumnsToContents()
+
+
+class ControlGridDragDrop(ControlGrid):
+    """
+    Especializacion del modelo para permitir el movimiento de filas mediante drag and drop.
+    Requiere que la ventana propietaria (w_parent) implemente grid_mover_filas(grid, li_rows, target_row).
+    """
+
+    def flags(self, index):
+        if not index.isValid():
+            flag = QtCore.Qt.ItemFlag.ItemIsEnabled
+            flag |= QtCore.Qt.ItemFlag.ItemIsDropEnabled
+            return flag
+        return ControlGrid.flags(self, index) | QtCore.Qt.ItemFlag.ItemIsDragEnabled
+
+    def supportedDropActions(self):
+        return QtCore.Qt.DropAction.MoveAction
+
+    def mimeTypes(self):
+        return ["application/x-grid-row"]
+
+    def mimeData(self, indexes):
+        mime_data = QtCore.QMimeData()
+        rows = sorted(list(set([index.row() for index in indexes])))
+        data = ",".join(map(str, rows))
+        mime_data.setData("application/x-grid-row", QtCore.QByteArray(data.encode()))
+        return mime_data
+
+    def dropMimeData(self, data, action, row, column, parent):
+        if action == QtCore.Qt.DropAction.IgnoreAction:
+            return True
+        if not data.hasFormat("application/x-grid-row"):
+            return False
+
+        if row == -1:
+            if parent.isValid():
+                row = parent.row()
+            else:
+                row = self.rowCount(QtCore.QModelIndex())
+
+        encoded_data = data.data("application/x-grid-row")
+        try:
+            li_rows = [int(x) for x in encoded_data.data().decode().split(",")]
+        except ValueError:
+            return False
+
+        if hasattr(self.w_parent, "grid_mover_filas"):
+            if self.w_parent.grid_mover_filas(self.grid, li_rows, row):
+                self.refresh()
+                return True
+        return False
+
+
+class GridDragDrop(Grid):
+    """
+    Grid con capacidad de mover filas con el raton mediante drag and drop.
+    """
+
+    def __init__(self, *args, **kwargs):
+        Grid.__init__(self, *args, **kwargs)
+
+        self.cg = ControlGridDragDrop(self, self.w_parent, self.o_columns)
+        self.setModel(self.cg)
+
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
+        self.setDropIndicatorShown(True)
+        self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)

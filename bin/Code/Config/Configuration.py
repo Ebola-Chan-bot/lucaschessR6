@@ -2,7 +2,7 @@ import os.path
 import pickle
 from datetime import date
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import Qt
 
 import Code
@@ -16,7 +16,7 @@ from Code.Base.Constantes import (
     MENU_PLAY_BOTH,
     POS_TUTOR_HORIZONTAL,
     NOTATION_ALGEBRAIC,
-    HIGHLIGHT_STYLE_ARROW
+    HIGHLIGHT_STYLE_ARROW,
 )
 from Code.Board import ConfBoards
 from Code.Config import ConfigEngines, ConfigPaths
@@ -104,9 +104,11 @@ class Configuration:
 
         self.x_show_effects = False
         self.x_pieces_speed = 100
+        self.x_pieces_move = "InOutQuad"
         self.x_save_tutor_variations = True
 
         self.x_mouse_shortcuts = False
+        self.x_show_square_shortcut = 50
         self.x_show_candidates = False
 
         self.x_captures_activate = True
@@ -129,7 +131,7 @@ class Configuration:
         self.x_wheel_pgn = GO_FORWARD
 
         self.x_menu_play = MENU_PLAY_BOTH
-        self.x_menu_play_config = True
+        # self.x_menu_play_config = True
 
         self.x_opacity_tool_board = 10
         self.x_position_tool_board = "T"
@@ -213,6 +215,8 @@ class Configuration:
         self.x_eval_mistake = 7.5
         self.x_eval_inaccuracy = 3.3
 
+        self.x_eval_goodmove_tolerance = 0
+
         self.x_eval_very_good_depth = 8
         self.x_eval_good_depth = 5
         self.x_eval_speculative_depth = 3
@@ -282,7 +286,7 @@ class Configuration:
     def save_folder(self):
         return self.get_folder_default(self.x_save_folder)
 
-    def set_save_folder(self, folder):
+    def set_save_folder(self, folder: str) -> None:
         self.x_save_folder = folder
         self.graba()
 
@@ -300,7 +304,7 @@ class Configuration:
                         self._dic_books[entry.name] = entry.path
 
             add_folder(Code.path_resource("Openings"))
-            for engine in ("foxcub", "fox", "maia", "irina", "rodentii"):
+            for engine in ("eguzkilore", "eguzki", "maia", "irina", "rodentii"):
                 add_folder(Util.opj(Code.folder_engines, engine))
         return self._dic_books
 
@@ -324,12 +328,13 @@ class Configuration:
             "inaccuracy": (1.0, 99.0, "dec"),
             "very_good_depth": (1, 128, "int"),
             "good_depth": (1, 128, "int"),
+            "goodmove_tolerance": (0, 25, "%"),
             "speculative_depth": (1, 128, "int"),
             "max_elo": (2000, 4000, "int"),
             "min_elo": (0, 2000, "int"),
-            "elo_blunder_factor": (1, 99, "dec"),
-            "elo_mistake_factor": (1, 99, "dec"),
-            "elo_inaccuracy_factor": (1, 99, "dec"),
+            "elo_blunder_factor": (1, 99.0, "dec"),
+            "elo_mistake_factor": (1, 99.0, "dec"),
+            "elo_inaccuracy_factor": (1, 99.0, "dec"),
         }
 
     def boxrooms(self):
@@ -356,6 +361,18 @@ class Configuration:
     def pieces_speed_porc(self):
         sp = min(self.x_pieces_speed, 300)
         return sp / 100.0
+
+    def pieces_move_qtype(self):
+        qtype = QtCore.QEasingCurve.Type.InOutQuad
+        if self.x_pieces_move == "InOutQuad":
+            qtype = QtCore.QEasingCurve.Type.InOutQuad
+        # elif self.x_pieces_move == "InOutSine":
+        #     qtype = QtCore.QEasingCurve.Type.InOutSine
+        # elif self.x_pieces_move == "InOutCubic":
+        #     qtype = QtCore.QEasingCurve.Type.InOutCubic
+        elif self.x_pieces_move == "Linear":
+            qtype = QtCore.QEasingCurve.Type.Linear
+        return qtype
 
     def set_player(self, value):
         self.x_player = value
@@ -418,7 +435,7 @@ class Configuration:
 
     @staticmethod
     def estilos():
-        return [(x, x) for x in QtWidgets.QStyleFactory.keys()]
+        return [(x, x) for x in QtWidgets.QStyleFactory.keys() if x != "windows11"]
 
     def read_dic_x(self) -> dict:
         return {x: getattr(self, x) for x in dir(self) if x.startswith("x_")}
@@ -616,7 +633,7 @@ class Configuration:
                     var["x_anchoPieza"] = ancho_pieza
                     db["BASE"] = self.dic_conf_boards_pk["BASE"] = var
             # Para cambiar el tema por defecto por el actual
-            # with open("../resources/IntFiles/basepk(((1,2,3))).board", "wb") as f:
+            # with open("../resources/IntFiles/basepk1.board", "wb") as f:
             #       f.write(pickle.dumps(db["BASE"], protocol=4))
 
     def size_base(self):
@@ -694,3 +711,24 @@ class Configuration:
 
     def wheel_pgn(self, forward):
         return forward if self.x_wheel_pgn != GO_FORWARD else not forward
+
+    def needs_reinit(self, dic_previo: dict) -> bool:
+        dic_current = self.read_dic_x()
+        st_needs_reinit = {
+            "x_style",
+            "x_digital_board",
+            "x_font_points",
+            "x_font_family",
+            "x_margin_pieces",
+            "x_opacity_tool_board",
+            "x_position_tool_board",
+            "x_shadows_board",
+            "x_style_icons",
+            "x_style_mode",
+            "x_tb_orientation_horizontal",
+        }
+        for x, value in dic_previo.items():
+            if dic_current[x] != value:
+                if x in st_needs_reinit:
+                    return True
+        return False

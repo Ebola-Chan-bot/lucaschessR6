@@ -96,10 +96,8 @@ def launch_prompt(main_window, oprompt: Prompt, game: Game.Game):
         webbrowser.open(oprompt.web)
 
     prompt = oprompt.prompt
-    game_new = Game.Game()
-    game_new.assign_other_game(game)
-    game_new.remove_info_moves()
-    prompt = f"{prompt.strip()}\nThe game is:\n{game.pgn()}"
+    game_new = game.clone(with_variations=False)
+    prompt = f"{prompt.strip()}\nThe game is:\n{game_new.pgn()}"
     QTUtils.set_clipboard(prompt)
 
     QTMessages.temporary_message(
@@ -130,7 +128,7 @@ class WPrompts(LCDialog.LCDialog):
         o_columns.nueva("name", _("Name"), 300)
         o_columns.nueva("web", _("Web"), 300)
         self.grid = Grid.Grid(self, o_columns, complete_row_select=True)
-        self.grid.setMinimumWidth(self.grid.width_columns_displayables() + 20)
+        self.grid.fix_min_width()
 
         tb = QTDialogs.LCTB(self)
         tb.new(_("Close"), Iconos.MainMenu(), self.aceptar)

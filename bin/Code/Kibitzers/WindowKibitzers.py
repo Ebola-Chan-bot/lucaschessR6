@@ -8,7 +8,7 @@ from Code.Base.Constantes import (
     KIB_INDEXES,
     KIB_POLYGLOT,
 )
-from Code.Books import Books, DBPolyglot, WBooks
+from Code.Books import Books, WBooks
 from Code.Engines import Priorities
 from Code.Kibitzers import Kibitzers
 from Code.QT import (
@@ -23,7 +23,6 @@ from Code.QT import (
     QTDialogs,
     QTMessages,
 )
-from Code.Z import Util
 
 KIB_BEFORE_MOVE, KIB_AFTER_MOVE = True, False
 
@@ -79,7 +78,8 @@ class WKibitzers(LCDialog.LCDialog):
             edicion=Delegados.PmIconosBMT(self, dict_icons=self.tipos.dict_delegado()),
         )
         o_columns.nueva("NOMBRE", _("Kibitzer"), 209)
-        self.grid_kibitzers = Grid.Grid(self, o_columns, complete_row_select=True, select_multiple=True, xid="kib")
+        self.grid_kibitzers = Grid.GridDragDrop(self, o_columns, complete_row_select=True, select_multiple=True,
+                                                xid="kib")
         self.grid_kibitzers.setAlternatingRowColors(False)
 
         p = self.grid_kibitzers.palette()
@@ -237,7 +237,11 @@ class WKibitzers(LCDialog.LCDialog):
         elif self.me_key.startswith("opcion"):
             opcion = kibitzer.li_uci_options_editable()[int(self.me_key[7:])]
             opcion.valor = valor
+            if opcion == "MultiPV":
+                kibitzer.set_multipv_var(opcion.valor)
+                valor = str(kibitzer.multiPV)
             kibitzer.set_uci_option(opcion.name, valor)
+
         self.kibitzers.save()
         self.goto(nk)
 
@@ -262,17 +266,6 @@ class WKibitzers(LCDialog.LCDialog):
         for book in list_books.lista:
             submenu.opcion(("book", book), book.name, rondo.otro())
             submenu.separador()
-        index_polyglots = DBPolyglot.IndexPolyglot()
-        li_factory = index_polyglots.list()
-        if li_factory:
-            subfactory = submenu.submenu(_("Polyglot book factory"), Iconos.FactoryPolyglot())
-            folder_factory = Code.configuration.paths.folder_polyglots_factory()
-            for reg in li_factory:
-                name = reg["FILENAME"][:-6]
-                path = Util.opj(folder_factory, reg["FILENAME"])
-                book = Books.Book("P", name, path, True)
-                subfactory.opcion(("book", book), name, rondo.otro())
-                subfactory.separador()
         submenu.opcion(("installbook", None), _("Registered books"), Iconos.Nuevo())
         menu.separador()
 
@@ -407,15 +400,45 @@ class WKibitzers(LCDialog.LCDialog):
     def krecno(self):
         return self.grid_kibitzers.recno()
 
+    def _update_move(self, target_row):
+        self.kibitzers.save()
+        self.goto(target_row)
+
     def up(self):
-        num = self.kibitzers.up(self.krecno())
-        if num is not None:
-            self.goto(num)
+        num = self.krecno()
+        if num > 0:
+            lista = self.kibitzers.lista
+            lista[num], lista[num - 1] = lista[num - 1], lista[num]
+            self._update_move(num - 1)
 
     def down(self):
-        num = self.kibitzers.down(self.krecno())
-        if num is not None:
-            self.goto(num)
+        num = self.krecno()
+        lista = self.kibitzers.lista
+        if num < (len(lista) - 1):
+            lista[num], lista[num + 1] = lista[num + 1], lista[num]
+            self._update_move(num + 1)
+
+    def grid_mover_filas(self, _grid, li_rows, target_row):
+        lic = self.kibitzers.lista
+
+        # 1. Obtener los objetos/datos que se van a mover
+        items_a_mover = [lic[i] for i in li_rows]
+
+        # 2. Borrar las filas originales (en orden inverso para no alterar los índices)
+        for i in sorted(li_rows, reverse=True):
+            del lic[i]
+
+        # 3. Ajustar el índice de destino si se han borrado elementos antes de él
+        borrados_antes = sum(1 for i in li_rows if i < target_row)
+        target_row -= borrados_antes
+
+        # 4. Insertar los elementos en la nueva posición
+        for item in reversed(items_a_mover):
+            lic.insert(target_row, item)
+
+        self._update_move(target_row)
+
+        return True
 
     def grid_num_datos(self, grid):
         gid = grid.id
@@ -489,7 +512,8 @@ class WKibitzers(LCDialog.LCDialog):
             self.liKibActual.append((_("Fixed depth"), me.max_depth, "max_depth"))
             self.liKibActual.append((_("Fixed nodes"), me.nodes, "nodes"))
 
-            for num, opcion in enumerate(me.li_uci_options_editable()):
+            li_options = me.li_uci_options_editable()
+            for num, opcion in enumerate(li_options):
                 default = opcion.label_default()
                 label_default = f" ({default})" if default else ""
                 valor = str(opcion.valor)
@@ -507,7 +531,6 @@ class WKibitzerLive(LCDialog.LCDialog):
     # result_posicionBase: Position
     result_max_time: float
     result_max_depth: int
-    has_changes: bool
 
     def __init__(self, w_parent, configuration, num_kibitzer):
         self.kibitzers = Kibitzers.Kibitzers()
@@ -518,7 +541,6 @@ class WKibitzerLive(LCDialog.LCDialog):
         LCDialog.LCDialog.__init__(self, w_parent, titulo, icono, extparam)
 
         self.configuration = configuration
-        self.has_changes = False
 
         self.li_options = self.read_options()
         self.liOriginal = self.read_options()
@@ -564,29 +586,8 @@ class WKibitzerLive(LCDialog.LCDialog):
             li.append([f"{opcion.name}{label_default}", valor, "%d" % num])
         return li
 
-    def commit_current_editor(self):
-        index = self.grid_values.currentIndex()
-        if not index.isValid():
-            return
-        editor = QtWidgets.QApplication.focusWidget()
-        while editor is not None and not isinstance(editor, (Controles.ED, Controles.SB, Controles.CB)):
-            if not self.grid_values.isAncestorOf(editor):
-                editor = None
-                break
-            editor = editor.parentWidget()
-        if editor is None or not self.grid_values.isAncestorOf(editor):
-            return
-        delegate = self.grid_values.itemDelegateForColumn(index.column())
-        if delegate is None:
-            return
-        delegate.commitData.emit(editor)
-        delegate.closeEditor.emit(editor, QtWidgets.QAbstractItemDelegate.EndEditHint.NoHint)
-
     def grabar(self):
-        self.commit_current_editor()
-        self.has_changes = self.li_options != self.liOriginal
-        if self.has_changes:
-            self.kibitzers.save()
+        self.kibitzers.save()
         lidif_opciones = []
         xprioridad = None
         xpointofview = None

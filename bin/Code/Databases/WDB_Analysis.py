@@ -3,6 +3,7 @@ from Code.Analysis import WindowAnalysisParam
 from Code.Base import Game
 from Code.QT import Iconos, QTDialogs, QTMessages
 from Code.SQL import UtilSQL
+from Code.Engines import Engines
 
 
 class DBAnalysis:
@@ -135,22 +136,22 @@ class WDBAnalisis:
             return
 
     def new_analysis(self, pv):
-        alm = WindowAnalysisParam.analysis_parameters(self.wowner, False, all_engines=False)
+        alm = WindowAnalysisParam.analysis_parameters(self.wowner, False, False, False, False)
         if alm is None:
             return
 
         with QTMessages.analizando(self.wowner):
-
             if alm.engine == "default":
-                xengine = Code.procesador.analyzer_clone(alm.vtime, alm.depth, alm.multiPV)
+                xengine = Code.procesador.analyzer_clone(alm.vtime, alm.depth, alm.nodes, alm.multiPV)
             else:
-                conf_motor = Code.configuration.engines.search(alm.engine)
-                conf_motor.set_multipv_var(alm.multiPV)
-                xengine = Code.procesador.create_manager_engine(conf_motor, alm.vtime, alm.depth, has_multipv=True)
+                conf_engine: Engines.Engine = Code.configuration.engines.search(alm.engine)
+                conf_engine.set_multipv_var(alm.multiPV)
+                xengine = Code.procesador.create_manager_analyzer_var(conf_engine, alm.vtime, alm.depth, alm.nodes,
+                                                                      conf_engine.multiPV)
 
             game = Game.Game()
             game.read_pv(pv)
-            mrm, pos = xengine.analyzes_move_game(game, 9999, alm.vtime, alm.depth)
+            mrm = xengine.analyze_last_position(game, None)
 
             rotulo = mrm.name
             if alm.vtime:
@@ -161,6 +162,6 @@ class WDBAnalisis:
 
             mrm.rotulo = rotulo
 
-            xengine.finalize()
+            xengine.close()
 
         self.db_analysis().new(pv, mrm)

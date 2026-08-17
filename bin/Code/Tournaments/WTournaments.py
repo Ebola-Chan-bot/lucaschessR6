@@ -107,7 +107,6 @@ class WTournaments(LCDialog.LCDialog):
         n = self.grid.recno()
         if n >= 0:
             self.trabajar(self.nom_torneo_pos(n))
-            self.accept()
 
     def edit_name(self, previo):
         nom_torneo = QTMessages.read_simple(self, _("Tournaments between engines"), _("Name"), previo)

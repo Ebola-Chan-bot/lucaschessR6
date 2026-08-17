@@ -48,6 +48,7 @@ class ShowHtml:
 
         self.li_body.append(
             f"""<tr class="group"><td>{group}{sp}</td>
+              <td class="val">&nbsp;</td>
               <td class="val">{tw}</td>
               <td class="val">{tb}</td>
               <td class="val">{tt}</td>
@@ -62,20 +63,21 @@ class ShowHtml:
         sp = self.check_maxlabel(label)
         w, b = moves[True], moves[False]
         t = w + b
-        # if t == 0:
-        #     return
+        if t == 0:
+            return
         pw = self.pvar(w, self.white_analyzed)
         pb = self.pvar(b, self.black_analyzed)
         pt = self.pvar(t, self.total_analyzed)
-        rest = f"""<td class="val"><small>{sym}</small></td>""" if sym else ""
+        rest = f"""<td class="val"><small>{sym if sym else "&nbsp;"}</small></td>"""
         self.li_body.append(
             f"""<tr class="{name_class}"><td class="label">{sp}{label}</td>
+                {rest}
               <td class="val">{w}</td>
               <td class="val">{b}</td>
               <td class="val">{t}</td>
               <td class="val">{pw}</td>
               <td class="val">{pb}</td>
-              <td class="val">{pt}</td>{rest}
+              <td class="val">{pt}</td>
             </tr>"""
         )
 
@@ -84,6 +86,7 @@ class ShowHtml:
         sp = self.check_maxlabel(label)
         self.li_body.append(
             f"""<tr class="total"><td class="val">{sp}{label}{sp}</td>
+              <td class="val">&nbsp;</td>
               <td class="val">{self.white_analyzed}</td>
               <td class="val">{self.black_analyzed}</td>
               <td class="val">{self.total_analyzed}</td>
@@ -91,34 +94,32 @@ class ShowHtml:
         )
 
     def moves_html(
-        self,
-        moves_very_good,
-        moves_good,
-        moves_good_no,
-        moves_interestings,
-        moves_gray,
-        moves_inaccuracies,
-        moves_mistakes,
-        moves_blunders,
+            self,
+            moves_very_good,
+            moves_good,
+            moves_good_no,
+            moves_interestings,
+            moves_gray,
+            moves_inaccuracies,
+            moves_mistakes,
+            moves_blunders,
     ):
         if self.total_analyzed == 0:
             return _("There are no analyzed moves.")
 
         if self.add_group6(
-            _("Best moves"),
-            moves_very_good,
-            moves_good,
-            moves_interestings,
-            moves_good_no,
+                _("Best moves"),
+                moves_very_good,
+                moves_good,
+                moves_interestings,
+                moves_good_no,
         ):
             self.add_label6("brilliant", _("Brilliant moves"), moves_very_good, "‼")
             self.add_label6("good", _("Good moves"), moves_good, "!")
             self.add_label6("interesting", _("Interesting moves"), moves_interestings, "⁉")
             self.add_label6("easy-good", _("Other best moves"), moves_good_no)
 
-        if self.add_group6(_("Acceptable moves"), moves_gray):
-            pass
-            # self.add_label6("normal", _("Acceptable moves"), moves_gray)
+        self.add_group6(_("Acceptable moves"), moves_gray)
 
         if self.add_group6(_("Bad moves"), moves_inaccuracies, moves_mistakes, moves_blunders):
             self.add_label6("inaccuracy", _("Dubious moves"), moves_inaccuracies, "⁈")
@@ -157,9 +158,9 @@ class ShowHtml:
 
         add_label("total", ALLGAME, _("Elo performance"))
         for std, tit in (
-            (OPENING, _("Opening")),
-            (MIDDLEGAME, _("Middlegame")),
-            (ENDGAME, _("Endgame")),
+                (OPENING, _("Opening")),
+                (MIDDLEGAME, _("Middlegame")),
+                (ENDGAME, _("Endgame")),
         ):
             add_label("normal", std, tit)
 
@@ -187,69 +188,98 @@ class ShowHtml:
 
     @staticmethod
     def xhtml(body, is_doble):
-        single = f"""              <th>{_("White")}</th>
-              <th>{_("Black")}</th>
-              <th>{_("Total")}</th>
-"""
-        doble = single if is_doble else ""
+        single = f"""<th>{_("White")}</th><th>{_("Black")}</th><th>{_("Total")}</th>"""
+        if is_doble:
+            doble = single
+            single = f"<td></td>{single}"
+        else:
+            doble = ""
         return f"""<head><style>
           body {{
-            font-family: "Segoe UI", Arial, sans-serif;
-            color: #222;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #333;
+            background-color: #fdfdfd;
+            margin: 10px;
           }}
 
           table.stats {{
             width: 100%;
             border-collapse: collapse;
-            text-align: center;
+            border-spacing: 0;
+            border: 1px solid #e0e0e0;
+            overflow: hidden;
+            background-color: #fff;
           }}
 
           table.stats th, table.stats td {{
-            border: 1px solid #ccc;
-            padding: 6px;
+            padding: 12px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            border-right: 1px solid #f0f0f0;
           }}
 
           table.stats th {{
-            background: #f0f2f7;
-            font-weight: bold;
+            background-color: #f8f9fa;
+            color: #555;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
           }}
-          
+
+          table.stats tr:last-child td {{
+            border-bottom: none;
+          }}
+
+          table.stats tr td:last-child, table.stats tr th:last-child {{
+            border-right: none;
+          }}
+
+          table.stats tr:hover {{
+            background-color: #fcfcfc;
+          }}
 
           /* category headers */
           .group {{
-            background: #e8e8e8;
-            font-weight: bold;
+            background-color: #f4f6f9 !important;
+            color: #2c3e50;
+            font-weight: 700;
             text-align: left;
+            font-size: 1.05em;
           }}
 
           /* subcategories */
-          .brilliant {{ color:{Nags.nag_color(VERY_GOOD_MOVE)}; }}
-          .good {{ color:{Nags.nag_color(GOOD_MOVE)}; }}
-          .easy-good {{ color: #7397fa; }}
+          .brilliant {{ color:{Nags.nag_color(VERY_GOOD_MOVE)}; font-weight: 600; }}
+          .good {{ color:{Nags.nag_color(GOOD_MOVE)}; font-weight: 600; }}
+          .easy-good {{ color: #4a90e2; font-weight: 600; }}
 
-          .interesting {{ color:{Nags.nag_color(INTERESTING_MOVE)}; }}
-          .normal {{ color: #606060;}}
+          .interesting {{ color:{Nags.nag_color(INTERESTING_MOVE)}; font-weight: 600; }}
+          .normal {{ color: #666; }}
 
-          .inaccuracy {{ color:{Nags.nag_color(INACCURACY)}; }}
-          .mistake {{ color:{Nags.nag_color(MISTAKE)}; }}
-          .blunder {{ color:{Nags.nag_color(BLUNDER)}; }}
+          .inaccuracy {{ color:{Nags.nag_color(INACCURACY)}; font-weight: 600; }}
+          .mistake {{ color:{Nags.nag_color(MISTAKE)}; font-weight: 600; }}
+          .blunder {{ color:{Nags.nag_color(BLUNDER)}; font-weight: 600; }}
 
           .total {{
-            background: #bababa;
-            font-weight: bold;
+            background-color: #f0f2f5 !important;
+            font-weight: 800;
+            color: #1a1a1a;
           }}
 
-         .val {{
-            font-weight: bold;
-            display: block;
+          .val {{
             text-align: center;
           }}
 
           .label {{
-            display: block;
             text-align: right;
+            padding-right: 20px !important;
+            font-weight: 500;
+            color: #444;
+          }}
+
+          small {{
             font-weight: bold;
-            white-space: nowrap;
+            font-size: 1.1em;
+            padding-left: 5px;
           }}
     </style>
     </head>
@@ -257,7 +287,7 @@ class ShowHtml:
         <table class="stats">
           <thead>
             <tr>
-              <th></th>
+              <th style="width: 30%;"></th>
               {single}
               {doble}
             </tr>

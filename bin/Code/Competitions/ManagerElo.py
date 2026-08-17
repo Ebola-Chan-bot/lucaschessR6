@@ -167,8 +167,6 @@ class MotorElo:
         self.depthOpen = (elo / 100 - 8) if elo < 2100 else 100
         self.depthOpen = max(self.depthOpen, 2)
         self.key = alias
-        if self.depth:
-            self.key += " %d" % self.depth
         self.points_win = self.points_lose = self.points_draw = 0
 
     def label(self):
@@ -220,10 +218,10 @@ class ManagerElo(Manager.Manager):
             result = -1
         return Util.fide_elo(elo_player, elo_rival, result)
 
-    def list_engines(self, elo):
+    def list_engines_elo(self, elo):
         self.valores()
         li = []
-        total_emgines = len(self.list_engines)
+        total_engines = len(self.list_engines)
         for num, mt in enumerate(self.list_engines):
             mt_elo = mt.elo
             mt.siOut = False
@@ -240,7 +238,7 @@ class ManagerElo(Manager.Manager):
                 mt.points_draw = rot(RS_DRAW)
                 mt.points_lose = rot(RS_WIN_OPPONENT)
 
-                mt.number = total_emgines - num
+                mt.number = total_engines - num
 
                 li.append(mt)
 
@@ -312,7 +310,7 @@ class ManagerElo(Manager.Manager):
         self.put_pieces_bottom(is_white)
         self.remove_hints(True, remove_back=True)
         self.show_side_indicator(True)
-        label = f'{_("Opponent")}: <b>{self.datos_motor.label()}</b>'
+        label = f"{_('Opponent')}: <b>{self.datos_motor.label()}</b>"
         self.set_label1(label)
 
         nbsp = "&nbsp;" * 3
@@ -359,7 +357,7 @@ class ManagerElo(Manager.Manager):
                 "PTABLAS": self.datos_motor.points_draw,
             }
 
-            label_menu = f'{_("Lucas-Elo")}. {self.datos_motor.name}'
+            label_menu = f"{_('Lucas-Elo')}. {self.datos_motor.name}"
             if self.datos_motor.depth:
                 label_menu += " - %d" % self.datos_motor.depth
             with Adjournments.Adjournments() as adj:
@@ -464,7 +462,6 @@ class ManagerElo(Manager.Manager):
             rm_rival = None
 
             if self.in_the_opening:
-
                 ok, from_sq, to_sq, promotion = self.opening.run_engine(self.last_fen())
 
                 if ok:
@@ -487,7 +484,6 @@ class ManagerElo(Manager.Manager):
                     self.show_result()
                     return
         else:
-
             self.human_is_playing = True
             self.activate_side(is_white)
 

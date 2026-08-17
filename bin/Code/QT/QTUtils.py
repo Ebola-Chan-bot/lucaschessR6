@@ -1,6 +1,7 @@
 import os
-
+import sys
 from PySide6 import QtCore, QtGui, QtWidgets
+from shiboken6 import isValid
 
 
 def refresh_gui():
@@ -91,6 +92,72 @@ def deferred_call(mstime: int, called):
     QtCore.QTimer.singleShot(mstime, called)
 
 
+# def close_app():
+#     app: QtWidgets.QApplication = QtWidgets.QApplication.instance()
+#     if app is not None:
+#         app.closeAllWindows()
+#         app.quit()
+#         try:
+#             os._exit(0)
+#         except Exception:
+#             pass
+
 def close_app():
-    QtWidgets.QApplication.quit()
+    app = QtWidgets.QApplication.instance()
+    if app is not None:
+        # 1. Detener todos los QTimers
+        for timer in app.findChildren(QtCore.QTimer):
+            timer.stop()
+
+        # 2. Detener TODOS los QThreads
+        for thread in app.findChildren(QtCore.QThread):
+            if thread.isRunning():
+                thread.quit()
+                thread.wait(1000)
+                if thread.isRunning():
+                    thread.terminate()
+                    thread.wait()
+
+        # 3. Cerrar ventanas (aquí se disparan los closeEvent que
+        #    guardan configuración, posición, etc.)
+        app.closeAllWindows()
+
+        # 4. Procesar eventos pendientes
+        app.processEvents()
+
+        # 5. Salir del bucle de eventos
+        app.quit()
+
+    # Asegurar que lo escrito (logs, configuración) queda en disco
+    # antes de saltarnos la finalización normal del proceso.
+    if sys.stdout:
+        sys.stdout.flush()
+    if sys.stderr:
+        sys.stderr.flush()
+
+    # Salida inmediata a nivel de SO: evita que se ejecuten los
+    # destructores de librerías nativas cargadas dinámicamente
+    # (p.ej. los drivers .so de los eboards, que en Linux nunca se
+    # descargan con dlclose), cuya finalización choca con la
+    # limpieza de Qt/PySide6 y provoca el segfault al cerrar.
     os._exit(0)
+
+
+def delay(ms: int):
+    loop = QtCore.QEventLoop()
+    timer = QtCore.QTimer(loop)
+    timer.setSingleShot(True)
+    timer.timeout.connect(loop.quit)
+    timer.start(ms)
+    loop.exec()
+
+
+def scene_remove_item_safe(scene, item):
+    if item is None or not isValid(item) or scene != item.scene():
+        return
+    try:
+        scene.removeItem(item)
+    except RuntimeError as e:
+        if __debug__:
+            from Code.Z import Debug
+            Debug.prln(f"[warn] scene_remove_item_safe: {e}", color="red")

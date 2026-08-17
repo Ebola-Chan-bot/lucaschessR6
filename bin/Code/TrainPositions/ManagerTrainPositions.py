@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6 import QtCore
 
 from Code.Z import FNSLine, Util
 from Code.Base import Game, Move
@@ -259,7 +259,7 @@ class ManagerTrainPositions(Manager.Manager):
             self.wsolve.set_game(self.game_obj, self.advanced_return)
 
         else:
-            self.play_next_move()
+            QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def set_toolbar_comments(self, with_help: bool = True, with_continue: bool = False) -> None:
         li_options = [
@@ -471,9 +471,9 @@ class ManagerTrainPositions(Manager.Manager):
         )
 
     def control_teclado(self, nkey: int) -> None:
-        if nkey in (Qt.Key.Key_Plus, Qt.Key.Key_PageDown):
+        if nkey in (QtCore.Qt.Key.Key_Plus, QtCore.Qt.Key.Key_PageDown):
             self.ent_siguiente(TB_NEXT)
-        elif nkey in (Qt.Key.Key_Minus, Qt.Key.Key_PageUp):
+        elif nkey in (QtCore.Qt.Key.Key_Minus, QtCore.Qt.Key.Key_PageUp):
             self.ent_siguiente(TB_PREVIOUS)
 
     @staticmethod
@@ -533,7 +533,7 @@ class ManagerTrainPositions(Manager.Manager):
         self.show_comment_move(len(self.game) - 1)
         if is_rival_move:
             self.pon_help(False)
-            self.play_rival()
+            QtCore.QTimer.singleShot(0, self.play_rival)
 
         else:
             self.update_help()
@@ -738,7 +738,7 @@ class ManagerTrainPositions(Manager.Manager):
         self.pon_help(False)
         self.state = ST_ENDGAME
         if self.is_automatic_jump:
-            self.ent_siguiente(TB_NEXT)
+            QtCore.QTimer.singleShot(0, lambda: self.ent_siguiente(TB_NEXT))
             return False
         else:
             QTMessages.temporary_message(self.main_window, _("Line completed"), 0.9, fixed_size=None)
@@ -831,7 +831,6 @@ class ManagerTrainPositions(Manager.Manager):
         tmp_bp.mostrar()
         with open(nom_fns, "wt", encoding="utf-8", errors="ignore") as q:
             for n in range(nregs):
-
                 if tmp_bp.is_canceled():
                     break
 
@@ -842,7 +841,7 @@ class ManagerTrainPositions(Manager.Manager):
                 fen = li[0]
                 if len(li) < 3 or not li[2]:
                     # tutor a trabajar
-                    mrm = self.manager_rival.analiza(fen)
+                    mrm = self.manager_rival.analyze_fen(fen)
                     if not mrm.li_rm:
                         continue
                     rm = mrm.li_rm[0]
@@ -906,3 +905,13 @@ class ManagerTrainPositions(Manager.Manager):
         else:
             with_help = False
         self.pon_help(with_help)
+
+    def change_tutor_active(self):
+        previous = self.is_tutor_enabled
+        self.is_tutor_enabled = not previous
+        self.set_activate_tutor(self.is_tutor_enabled)
+        if previous:
+            self.analyze_end()
+        elif self.human_is_playing:
+            self.analyze_begin()
+

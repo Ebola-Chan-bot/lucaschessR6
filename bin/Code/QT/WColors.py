@@ -87,6 +87,7 @@ class WColors(LCDialog.LCDialog):
             "Foreground when disable": _("Foreground when disable"),
             "Background when disable": _("Background when disable"),
             "Analysis Bar": _("Analysis Bar"),
+            "Filling": _("Filling"),
         }
 
         o_columns = Columnas.ListaColumnas()
@@ -94,11 +95,11 @@ class WColors(LCDialog.LCDialog):
         o_columns.nueva("ORIGINAL", _("Original"), 120, align_center=True)
         o_columns.nueva("PERSONAL", _("Current"), 120, align_center=True)
         self.grid = Grid.Grid(self, o_columns, alternate=False, is_column_header_movable=False)
-        self.grid.setMinimumWidth(self.grid.width_columns_displayables() + 20)
+        self.grid.fix_min_width()
 
         status = Controles.LB(
             self,
-            f"{ _('[Mouse Double click] in column CURRENT to change color')}\n{ _('[Mouse double click] in column ORIGINAL to change all with this color')}\n{ _('[DEL key] in column CURRENT to remove change')}",
+            f"{_('[Mouse Double click] in column CURRENT to change color')}\n{_('[Mouse double click] in column ORIGINAL to change all with this color')}\n{_('[DEL key] in column CURRENT to remove change')}",
         )
 
         # Tool bar
@@ -116,7 +117,7 @@ class WColors(LCDialog.LCDialog):
         self.register_grid(self.grid)
         self.grid.resizeColumnToContents(0)
         self.restore_video(
-            default_width=self.grid.width_columns_displayables() + 24,
+            default_width=self.grid.width_and_vbar(),
             default_height=ScreenUtils.desktop_height() * 2 // 3,
         )
 
@@ -206,7 +207,7 @@ class WColors(LCDialog.LCDialog):
                     return _F(x)
                 if x in self.translation:
                     return self.translation[x]
-                for c in "|+ ":
+                for c in "|+, ":
                     if x.count(c) == 1:
                         uno, dos = x.split(c)
                         return f"{trans(uno)} - {trans(dos)}"

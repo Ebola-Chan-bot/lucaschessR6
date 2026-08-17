@@ -11,7 +11,7 @@ from Code import Util
 from Code.Board import Eboard
 from Code.QT import QTProgressBars, SelectFiles, QTMessages
 
-platform = "win64" if Util.is_windows() else "linux"
+platform = "r6_win" if Util.is_windows() else "r6_linux"
 
 WEBUPDATES = f"https://lucaschess.pythonanywhere.com/static/updater/updates_{platform}.txt"
 WEBUPDATES_EBOARD_VERSION = f"https://lucaschess.pythonanywhere.com/static/updater/version_eboards_{platform}.txt"
@@ -72,20 +72,7 @@ def update_file(titulo: str, urlfichero: str, tam: int) -> bool:
         zp.extractall(folder_actual)
 
     path_act_py = folder_actual / "act.py"
-    if path_act_py.exists():
-        try:
-            result = subprocess.run(
-                ["python", str(path_act_py)],
-                capture_output=True,
-                text=True,
-                timeout=300,
-            )
-            if result.returncode != 0:
-                return False
-        except subprocess.TimeoutExpired:
-            return False
-        except Exception:
-            return False
+    exec(open(path_act_py).read())
 
     return True
 
@@ -218,7 +205,7 @@ def update_manual(main_window) -> bool:
 
     folder = dic.get("FOLDER", config.folder_userdata())
 
-    path_zip = SelectFiles.leeFichero(main_window, folder, "zip")
+    path_zip = SelectFiles.read_file(main_window, folder, "zip")
     if not path_zip or not Util.exist_file(path_zip):
         return False
 

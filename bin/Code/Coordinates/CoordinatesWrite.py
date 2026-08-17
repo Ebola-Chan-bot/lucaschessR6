@@ -6,33 +6,6 @@ from Code.Base.Constantes import WHITE
 from Code.SQL import UtilSQL
 
 
-class GenTry:
-    def __init__(self, xfrom, xto):
-        letra_ini, letra_end = ord(xfrom[0]), ord(xto[0])
-        num_ini, num_end = ord(xfrom[1]), ord(xto[1])
-
-        li = []
-        for letra in range(letra_ini, letra_end + 1):
-            for num in range(num_ini, num_end + 1):
-                li.append(chr(letra) + chr(num))
-        self.li_base = li
-        self.pos = -1
-        self.li_current = None
-        self.gen_new()
-
-    def gen_new(self):
-        self.pos = -1
-        self.li_current = self.li_base[:]
-        random.shuffle(self.li_current)
-
-    def next(self):
-        self.pos += 1
-        if self.pos >= len(self.li_current) - 1:
-            self.gen_new()
-            self.pos += 1
-        return self.li_current[self.pos], self.li_current[self.pos + 1]
-
-
 class CoordinatesWrite:
     date: datetime.datetime
     st_done: set
@@ -48,7 +21,7 @@ class CoordinatesWrite:
         self.is_record = False
 
     def next(self, pieces):
-        chess_squares = {f"{file}{rank}" for file in 'abcdefgh' for rank in '12345678'}
+        chess_squares = {f"{file}{rank}" for file in "abcdefgh" for rank in "12345678"}
         resto = chess_squares - self.st_done
         return set(random.sample(sorted(resto), pieces))
 
@@ -78,16 +51,16 @@ class CoordinatesWrite:
 
     def str_done(self, pieces):
         if self.pending():
-            return f'{len(self.st_done) // pieces}/{64 // pieces}'
+            return f"{len(self.st_done) // pieces}/{64 // pieces}"
         else:
             return _("Ended")
 
     def str_done_info(self, pieces):
-        return f'{len(self.st_done) // pieces}/{64 // pieces}'
+        return f"{len(self.st_done) // pieces}/{64 // pieces}"
 
     def str_time(self, add_seconds=0):
         seconds = self.ms_time // 1000 + add_seconds
-        return f"{seconds:d}\""
+        return f'{seconds:d}"'
 
     def add_time(self, ms):
         self.ms_time += ms

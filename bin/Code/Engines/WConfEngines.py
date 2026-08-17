@@ -224,7 +224,7 @@ class WConfEngines(LCDialog.LCDialog):
         if resp is not None:
             folder_engine = os.path.dirname(self.engine.path_exe)
             if resp == "select_file":
-                path_file = SelectFiles.leeCreaFichero(self, folder_engine, "*", _("Select a file"))
+                path_file = SelectFiles.read_or_create_file(self, folder_engine, "*", _("Select a file"))
                 if path_file:
                     folder_file = os.path.dirname(path_file)
                     if Util.same_path(folder_file, folder_engine):
@@ -233,7 +233,7 @@ class WConfEngines(LCDialog.LCDialog):
                     return
                 value = path_file
             elif resp == "select_folder":
-                path_folder = SelectFiles.get_existing_directory(self, folder_engine,  _("Select a folder"))
+                path_folder = SelectFiles.get_existing_directory(self, folder_engine, _("Select a folder"))
                 if path_folder:
                     value = path_folder
                 else:
@@ -264,7 +264,9 @@ class WConfTutor(QtWidgets.QWidget):
         self.ed_depth = Controles.ED(self).type_integer(self.configuration.x_tutor_depth).relative_width(30)
 
         lb_multipv = Controles.LB2P(self, _("Number of variations evaluated by the engine (MultiPV)"))
-        self.ed_multipv = Controles.ED(self).type_integer_positive(self.configuration.x_tutor_multipv).relative_width(30)
+        self.ed_multipv = (
+            Controles.ED(self).type_integer_positive(self.configuration.x_tutor_multipv).relative_width(30)
+        )
         lb_maximum = Controles.LB(self, _("0 = Maximum"))
         ly_multi = Colocacion.H().control(self.ed_multipv).control(lb_maximum).relleno()
 
@@ -272,6 +274,11 @@ class WConfTutor(QtWidgets.QWidget):
             self,
             _("Disabled at the beginning of the game"),
             not self.configuration.x_default_tutor_active,
+        )
+        self.chb_save_variations = Controles.CHB(
+            self,
+            _('Convert analyses into variations'),
+            self.configuration.x_save_tutor_variations,
         )
         self.chb_background = Controles.CHB(
             self,
@@ -309,7 +316,8 @@ class WConfTutor(QtWidgets.QWidget):
         layout.controld(lb_sensitivity, 7, 0).control(self.cb_type, 7, 1)
         layout.empty_row(8, 30)
         layout.control(self.chb_disabled, 9, 0, num_columns=2)
-        layout.control(self.chb_background, 10, 0, num_columns=2)
+        layout.control(self.chb_save_variations, 10, 0, num_columns=2)
+        layout.control(self.chb_background, 11, 0, num_columns=2)
 
         ly = Colocacion.V().otro(layout).relleno(1)
         lyh = Colocacion.H().otro(ly).relleno(1).margen(30)
@@ -319,7 +327,7 @@ class WConfTutor(QtWidgets.QWidget):
         self.changed_engine()
         self.is_changed = False
 
-        for control in (self.chb_background, self.chb_disabled):
+        for control in (self.chb_background, self.chb_disabled, self.chb_save_variations):
             control.capture_changes(self.set_changed)
 
         for control in (
@@ -361,6 +369,8 @@ class WConfTutor(QtWidgets.QWidget):
             self.configuration.x_default_tutor_active = not self.chb_disabled.valor()
             self.configuration.x_tutor_diftype = self.cb_type.valor()
 
+            self.configuration.x_save_tutor_variations = self.chb_save_variations.valor()
+
             self.configuration.graba()
 
             dic = self.configuration.read_variables("TUTOR_ANALYZER")
@@ -394,7 +404,9 @@ class WConfAnalyzer(QtWidgets.QWidget):
         self.ed_depth = Controles.ED(self).type_integer(self.configuration.x_analyzer_depth).relative_width(30)
 
         lb_multipv = Controles.LB2P(self, _("Number of variations evaluated by the engine (MultiPV)"))
-        self.ed_multipv = Controles.ED(self).type_integer_positive(self.configuration.x_analyzer_multipv).relative_width(30)
+        self.ed_multipv = (
+            Controles.ED(self).type_integer_positive(self.configuration.x_analyzer_multipv).relative_width(30)
+        )
         lb_maximum = Controles.LB(self, _("0 = Maximum"))
         ly_multi = Colocacion.H().control(self.ed_multipv).control(lb_maximum).relleno()
 

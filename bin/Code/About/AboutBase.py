@@ -15,11 +15,11 @@ class ThanksTo:
             "themes": _("Themes"),
             "pieces": _("Pieces"),
             "training": _("Training"),
-            "engines-1": f'{_("Engines")}/1',
-            "engines-2": f'{_("Engines")}/2',
-            "engines-3": f'{_("Engines")}/3',
-            "engines-4": f'{_("Engines")}/4',
-            "engines-5": f'{_("Engines")}/5',
+            "engines-1": f"{_('Engines')}/1",
+            "engines-2": f"{_('Engines')}/2",
+            "engines-3": f"{_('Engines')}/3",
+            "engines-4": f"{_('Engines')}/4",
+            "engines-5": f"{_('Engines')}/5",
             "games": _("Games"),
             "programming": _("Programming"),
             "dedicated": _("Dedicated to"),
@@ -80,6 +80,17 @@ class ThanksTo:
 
     def maincontributors(self):
         li = (
+            ("Eric", "Main betatester."),
+            (
+                '<a href="https://goneill.co.nz/index.php">Graham O\'Neill</a>',
+                "Author of the drivers for the use of the electronic boards (except the official DGT ones)."
+                "<br>Also co-operator in the development of the interface code with the electronic boards.",
+            ),
+            (
+                "Laudecir Daniel",
+                "Main promoter of the Linux version, he did the selection and compilation of engines,"
+                "<br>as well as the establishment of the working Linux version.",
+            ),
             (
                 "Michele Tumbarello",
                 "Definition of Tourney-elo engines and the formulae for calculating the indices.",
@@ -89,24 +100,13 @@ class ThanksTo:
                 "His work was an essential help (saved many hours) in the transition "
                 "from Python 2.7 (version 11) to Python 3 (version R).",
             ),
-            ("Eric", "Main betatester."),
             (
                 "Johannes Bolzano",
                 "Code improvements and ideas to Find best move training and more.",
             ),  # Programme wiki administrator"),
-            (
-                "Laudecir Daniel",
-                "Main promoter of the Linux version, he did the selection and compilation of engines,"
-                "<br>as well as the establishment of the working Linux version.",
-            ),
-            (
-                '<a href="https://goneill.co.nz/index.php">Graham O\'Neill</a>',
-                "Author of the drivers for the use of the electronic boards (except the official DGT ones)."
-                "<br>Also co-operator in the development of the interface code with the electronic boards.",
-            ),
         )
 
-        txt = self.dl_ini()
+        txt = f"<hr>{self.dl_ini()}"
         for person, task in li:
             txt += self.dl_tit(person)
             txt += f"{self.dl_elem(task)}<hr>"
@@ -114,7 +114,7 @@ class ThanksTo:
         return txt
 
     def contributors(self):
-        txt = self.dl_ini()
+        txt = "<hr>" + self.dl_ini()
 
         def version(num, li_basex, li_restox, sim=True):
             random.shuffle(li_basex)
@@ -137,7 +137,24 @@ class ThanksTo:
             mtxt += f"{self.dl_elem(el_txt[:-2])}<hr>"
             return mtxt.replace(", ,", ",")
 
-        # Version R
+        # Version R6
+        li_base = [
+            "Rudolf Krämer",
+            "Stefan Akall",
+            "Zhuge Prajna",
+            '<a href="https://github.com/Ebola-Chan-bot">Ebola-Chan-bot</a>',
+            '<a href="https://github.com/neuroflowinfinix">neuroflowinfinix</a>',
+            '<a href="https://github.com/landroni">landroni</a>',
+            '<a href="https://github.com/macalimlim">macalimlim</a>',
+            '<a href="https://github.com/jpaverd">jpaverd</a>',
+            "tgett",
+            "Baked-Cake1",
+            "Yasmin"
+        ]
+        li_resto = []
+        txt += version("R6", li_base, li_resto, False)
+
+        # Version R2
         li_base = [
             "Alan Lee",
             "Nambi",
@@ -147,14 +164,14 @@ class ThanksTo:
             "Reinhard",
             "Olav Stüwe",
             '<a href="https://99-developer-tools.com/chess/">A. Wicker</a>',
-            'Budana P',
-            'Rudolf Krämer',
+            "Budana P",
+            "Rudolf Krämer",
             "Luis",
             "Stefan Akall",
-            '<a href="https://github.com/Ebola-Chan-bot">Ebola-Chan-bot</a>',
         ]
+
         li_resto = []
-        txt += version("R", li_base, li_resto, False)
+        txt += version("R2", li_base, li_resto, False)
 
         # Version 11
         li_base = [
@@ -253,13 +270,13 @@ class ThanksTo:
     def translators(self):
         txt = f"<center>{self.table_ini(center=False, border='1')}"
         txt += (
-            f'<tr><th></th><th>{_("Current")}</th><th>{_("Previous")}</th>'
-            f'<th></th><th>{_("Current")}</th><th>{_("Previous")}</th></tr>'
+            f"<tr><th></th><th>{_('Current')}</th><th>{_('Previous')}</th>"
+            f"<th></th><th>{_('Current')}</th><th>{_('Previous')}</th></tr>"
         )
         li = [x for x in os.listdir(Code.path_resource("Locale")) if len(x) == 2]
         nli = len(li)
         for pos in range(0, nli, 2):
-            txt += '<tr>'
+            txt += "<tr>"
             for elem in (pos, pos + 1):
                 if elem == nli:
                     break
@@ -270,16 +287,16 @@ class ThanksTo:
                 if previous.count(",") > 2:
                     liprev = previous.split(",")
                     previous = f"{','.join(liprev[:3])}<br>{','.join(liprev[3:])}"
-                txt += f'<td><b>{language}</b></td>'
-                txt += f'<td><b>{author}</b></td>'
-                txt += f'<td><small>{previous}</small></td>'
-            txt += '</tr>'
+                txt += f"<td><b>{language}</b></td>"
+                txt += f"<td><b>{author}</b></td>"
+                txt += f"<td><small>{previous}</small></td>"
+            txt += "</tr>"
 
         txt += f"{self.table_end()}</center>"
         txt += f'<big><bold><center>{_("Web")}: <a href="https://explore.transifex.com/">Transifex</a>'
         txt += (
             ' -  <a href="mailto:lukasmonk@gmail.com">Join Translation of LucasChess: '
-            'mail to lukasmonk@gmail.com</a></center></bold></big>'
+            "mail to lukasmonk@gmail.com</a></center></bold></big>"
         )
         return txt
 
@@ -412,7 +429,7 @@ class ThanksTo:
         txt += self.th(_("Author"))
         txt += (
             f'<th>{_("License")}: <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/">'
-            f'Attribution-NonCommercial-ShareAlike 3.0 Unported</a></th>'
+            f"Attribution-NonCommercial-ShareAlike 3.0 Unported</a></th>"
         )
         txt += "</tr>"
 
@@ -555,12 +572,12 @@ class ThanksTo:
             ),
             (
                 "Caballo R<br>(M, MM, P, RC C)",
-                'Luis',
+                "Luis",
                 '<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-ND 4.0</a>',
             ),
             (
                 "Cardinalv1",
-                'Luis',
+                "Luis",
                 '<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-ND 4.0</a>',
             ),
             (
@@ -663,13 +680,17 @@ class ThanksTo:
             ("The Week in Chess", "https://theweekinchess.com/"),
             ("Wikipedia", "https://en.wikipedia.org/wiki/List_of_chess_games"),
             ("fics", "https://www.ficsgames.org/download.html"),
-            ("Norman Pollock", ""),
+            ("Norman Pollock", "https://www.nk-qy.info/40h/"),
             (
                 f"STS<br>{_X(_('Created by %1'), 'Dann Corbit, Swaminathan')}",
                 "https://sites.google.com/site/strategictestsuite/about",
             ),
             ("Lichess database", "https://database.lichess.org"),
             ("Lichess openings", "https://github.com/lichess-org/chess-openings"),
+            (
+                "eco.pgn / pgn_extract<br>Ewart Shaw, Franz Hemmer, David J. Barnes, Ferdinand Mosca",
+                "https://www.cs.kent.ac.uk/~djb/pgn-extract/",
+            ),
         )
         txt = '<center><table border="1" cellpadding="5" cellspacing="0" >'
         for nom, web in li:
@@ -787,6 +808,12 @@ class ThanksTo:
                 "https://github.com/workhorsy/py-cpuinfo",
                 "MIT License",
             ),
+            (
+                "Unofficial LibQt6Pas for Linux",
+                "David Bannon",
+                "https://github.com/davidbannon/libqt6pas",
+                "GPL",
+            ),
         )
         txt = self.table_ini()
 
@@ -795,7 +822,7 @@ class ThanksTo:
             txt += f"<th>{tipo}</th>"
             txt += f"<td><center>{nom}</center></td>"
             txt += f'<td><a href="{web}">{web}</a></td>'
-            txt += f'<td>{licencia}</td>'
+            txt += f"<td>{licencia}</td>"
             txt += "</tr>"
 
         txt += self.table_end()

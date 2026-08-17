@@ -52,7 +52,7 @@ class WRun(LCDialog.LCDialog):
 
         engine: Engines.Engine = work.config_engine()
         self.engine_manager: EngineManagerPlay.EngineManagerPlay = procesador.create_manager_engine(
-            engine, int(work.seconds * 1000), work.depth, work.nodes, engine.multiPV
+            engine, int(work.seconds * 1000), work.depth, work.nodes, engine.multiPV > 1
         )
         self.engine_manager.set_faster_mode()
 
@@ -73,7 +73,7 @@ class WRun(LCDialog.LCDialog):
         o_columns = Columnas.ListaColumnas()
         o_columns.nueva("GROUP", _("Group"), 180)
         o_columns.nueva("DONE", _("Done"), 100, align_center=True)
-        o_columns.nueva("WORK", work.ref, 160, align_center=True)
+        o_columns.nueva("WORK", work.title(), 160, align_center=True)
 
         self.dworks = self.read_works()
         self.calc_max()
@@ -162,6 +162,8 @@ class WRun(LCDialog.LCDialog):
             t1 = time.time() - t0
             if rm is not None:
                 mov = rm.movimiento()
+                # results = ",".join(f"{k}:{v}" for k, v in self.elem.dic_results.items())
+                # pr_int(f'{self.elem.fen}|{results}|{mov}|{self.sts.groups.lista[ngroup].name}')
                 if mov:
                     if self.with_board:
                         self.board.show_one_arrow_temp(rm.from_sq, rm.to_sq, False)
@@ -208,10 +210,8 @@ class WRun(LCDialog.LCDialog):
         return None
 
     def read_work(self, work):
-        tm = '%d"' % work.seconds if work.seconds else ""
-        dp = "%d^" % work.depth if work.depth else ""
         r = Util.Record()
-        r.title = f"{work.ref} {tm}{dp}"
+        r.title = work.title()
         r.labels = []
         for ng in range(len(self.sts.groups)):
             rl = Util.Record()
@@ -417,7 +417,7 @@ class WUnSTS(LCDialog.LCDialog):
         for x in range(len(osts.groups)):
             group = osts.groups.group(x)
             o_columns.nueva("T%d" % x, group.name, 140, align_center=True)
-        self.grid = Grid.Grid(self, o_columns, complete_row_select=True, select_multiple=True)
+        self.grid = Grid.GridDragDrop(self, o_columns, complete_row_select=True, select_multiple=True)
         self.register_grid(self.grid)
 
         # Layout
@@ -446,11 +446,11 @@ class WUnSTS(LCDialog.LCDialog):
             formula_general = STS.Formula()
 
             form = FormLayout.FormLayout(self, _("Formula to calculate elo"), Iconos.Elo(), with_default=False)
-            form.apart_np(f'{_("Elo")} = X * {_("Result")} + K')
+            form.apart_np(f"{_('Elo')} = X * {_('Result')} + K")
             form.separador()
             form.checkbox(
-                f'<center><b>{_("By default")}</b></center>'
-                + f'X={formula_general.x_default:.04f} K={formula_general.k_default:.04f}',
+                f"<center><b>{_('By default')}</b></center>"
+                + f"X={formula_general.x_default:.04f} K={formula_general.k_default:.04f}",
                 False,
             )
             form.separador()
@@ -468,8 +468,11 @@ class WUnSTS(LCDialog.LCDialog):
                 self.grid.refresh()
 
     def export(self):
-        resp = SelectFiles.salvaFichero(self, _("CSV file"), Code.configuration.save_folder(), "csv", True)
+        folder = Code.configuration.save_folder()
+        resp = SelectFiles.save_file(self, _("CSV file"), folder, "csv", True)
         if resp:
+            folder = os.path.dirname(resp)
+            Code.configuration.set_save_folder(folder)
             self.sts.write_csv(resp)
 
     def up(self):
@@ -483,6 +486,28 @@ class WUnSTS(LCDialog.LCDialog):
         if self.sts.down(row):
             self.grid.goto(row + 1, 0)
             self.grid.refresh()
+
+    def grid_mover_filas(self, _grid, li_rows, target_row):
+        lic = self.sts.works.lista
+
+        # 1. Obtener los objetos/datos que se van a mover
+        items_a_mover = [lic[i] for i in li_rows]
+
+        # 2. Borrar las filas originales (en orden inverso para no alterar los índices)
+        for i in sorted(li_rows, reverse=True):
+            del lic[i]
+
+        # 3. Ajustar el índice de destino si se han borrado elementos antes de él
+        borrados_antes = sum(1 for i in li_rows if i < target_row)
+        target_row -= borrados_antes
+
+        # 4. Insertar los elementos en la nueva posición
+        for item in reversed(items_a_mover):
+            lic.insert(target_row, item)
+
+        self.sts.save()
+        self.grid.goto(target_row, 0)
+        self.grid.refresh()
 
     def wk_run(self):
         row = self.grid.recno()
@@ -520,7 +545,7 @@ class WUnSTS(LCDialog.LCDialog):
                 return None
             work = self.sts.create_work(me)
         else:
-            work.workTime = 0.0
+            work.work_time = 0.0
 
         w = WWork(self, self.sts, work)
         if w.exec():
@@ -533,7 +558,7 @@ class WUnSTS(LCDialog.LCDialog):
     def wk_import(self, work=None):
         if work is None or not work:
             if self.select_engines is None:
-                self.select_engines = SelectEngines.SelectEngines(self)
+                self.select_engines = SelectEngines.get_select_engines(self)
             engine = self.select_engines.menu(self)
             if not engine:
                 return None
@@ -542,7 +567,7 @@ class WUnSTS(LCDialog.LCDialog):
             work.info = engine.id_info
 
         else:
-            work.workTime = 0.0
+            work.work_time = 0.0
 
         w = WWork(self, self.sts, work)
         if w.exec():
@@ -783,11 +808,11 @@ class WSTS(LCDialog.LCDialog):
             formula = STS.Formula()
 
             form = FormLayout.FormLayout(self, _("Formula to calculate elo"), Iconos.Elo(), with_default=False)
-            form.apart_np(f'{_("Elo")} = X * {_("Result")} + K')
+            form.apart_np(f"{_('Elo')} = X * {_('Result')} + K")
             form.separador()
             form.checkbox(
-                f'<center><b>{_("Initial")}<b></center>'
-                + f'X={formula.x_default_base:.04f} K={formula.k_default_base:.04f}',
+                f"<center><b>{_('Initial')}<b></center>"
+                + f"X={formula.x_default_base:.04f} K={formula.k_default_base:.04f}",
                 False,
             )
             form.separador()

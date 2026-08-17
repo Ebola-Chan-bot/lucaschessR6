@@ -1,4 +1,5 @@
 import random
+from PySide6 import QtCore
 
 import Code
 from Code.Z import Adjournments, Util
@@ -65,7 +66,7 @@ class ManagerSwiss(Manager.Manager):
         self.manager_rival.check_engine()
         self.start_message(nomodal=Code.eboard and Util.is_linux())  # nomodal: problema con eboard
 
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def base_inicio(self, swiss: Swiss.Swiss, xmatch: Swiss.Match):
 
@@ -179,8 +180,6 @@ class ManagerSwiss(Manager.Manager):
             self.main_window.start_clock(self.set_clock, 1000)
         else:
             self.main_window.base.change_player_labels(bl, ng)
-
-        self.main_window.set_notify(self.mueve_rival_base)
 
         self.game.add_tag_timestart()
 
@@ -371,7 +370,7 @@ class ManagerSwiss(Manager.Manager):
         self.manager_rival.check_engine()
         self.start_message()
         self.pgn_refresh(not self.is_engine_side_white)
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def xpause(self):
         self.state = ST_PAUSE
@@ -386,7 +385,7 @@ class ManagerSwiss(Manager.Manager):
         self.board.set_position(self.game.last_position)
         self.pon_toolbar()
         self.main_window.show_pgn()
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def final_x(self):
         if self.state != ST_ENDGAME:
@@ -500,7 +499,7 @@ class ManagerSwiss(Manager.Manager):
         if self.book:
             move_found, rm = self.select_book_move(self.book, self.book_rr, self.book_depth)
             if move_found:
-                self.rival_has_moved(rm)
+                QtCore.QTimer.singleShot(0, lambda: self.rival_has_moved(rm))
                 return
             else:
                 self.book = None
@@ -513,14 +512,12 @@ class ManagerSwiss(Manager.Manager):
         else:
             seconds_black = seconds_white = 10 * 60
             seconds_move = 0
-        run_engine_params = self.manager_rival.run_engine_params
-        run_engine_params.update_var_time(seconds_white, seconds_black, seconds_move)
-        self.manager_rival.play_game(self.game, self.rival_has_moved)
+        self.manager_rival.run_engine_params.update_var_time(seconds_white, seconds_black, seconds_move)
+        rm_rival: EngineResponse.EngineResponse = self.manager_rival.play(game=self.game)
+        if rm_rival is not None:
+            QtCore.QTimer.singleShot(0, lambda: self.rival_has_moved(rm_rival))
 
-    def mueve_rival_base(self):
-        self.rival_has_moved(self.main_window.dato_notify)
-
-    def rival_has_moved(self, rm=None):
+    def rival_has_moved(self, rm_rival: EngineResponse.EngineResponse) -> bool:
         self.rival_is_thinking = False
         time_s = self.stop_clock(False)
         self.thinking(False)
@@ -528,26 +525,26 @@ class ManagerSwiss(Manager.Manager):
         if self.state in (ST_ENDGAME, ST_PAUSE):
             return self.state == ST_ENDGAME
 
-        self.lirm_engine.append(rm)
+        self.lirm_engine.append(rm_rival)
         if not self.check_draw_resign():
             self.show_result()
             return True
 
-        ok, self.error, move = Move.get_game_move(
+        ok, __, move = Move.get_game_move(
             self.game,
             self.game.last_position,
-            rm.from_sq,
-            rm.to_sq,
-            rm.promotion,
+            rm_rival.from_sq,
+            rm_rival.to_sq,
+            rm_rival.promotion,
         )
-        self.rm_rival = rm
+        self.rm_rival = rm_rival
         if ok:
             move.set_time_ms(int(time_s * 1000))
             move.set_clock_ms(self.tc_rival.pending_time * 1000)
             self.add_move(move, False)
             self.move_the_pieces(move.list_piece_moves, True)
             self.beep_extended(False)
-            self.play_next_move()
+            QtCore.QTimer.singleShot(0, self.play_next_move)
             return True
 
         else:
@@ -585,7 +582,7 @@ class ManagerSwiss(Manager.Manager):
         self.beep_extended(True)
 
         self.error = ""
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
         return True
 
     def add_move(self, move, is_player_move):

@@ -3,7 +3,6 @@ import os
 import OSEngines  # in OS folder
 
 import Code
-from Code.Z import Util
 from Code.Base.Constantes import (
     ENG_ELO,
     ENG_EXTERNAL,
@@ -18,6 +17,7 @@ from Code.Base.Constantes import (
 from Code.Competitions import ManagerElo
 from Code.Engines import Engines, EnginesMicElo, EnginesWicker
 from Code.QT import Colocacion, Columnas, Controles, Grid, Iconos, LCDialog, QTDialogs, QTMessages
+from Code.Z import Util
 
 
 def read_uci_rodent(cm):
@@ -392,7 +392,6 @@ class SelectEngines:
 
     def list_all_engines(self):
         if self.li_engines is None:
-
             self.li_engines = []
 
             st_alias = set()
@@ -539,6 +538,16 @@ class SelectEngines:
         return rival
 
 
+select_engines: SelectEngines | None = None
+
+
+def get_select_engines(owner):
+    global select_engines
+    if select_engines is None:
+        select_engines = SelectEngines(owner)
+    return select_engines
+
+
 class WSelectEngines(LCDialog.LCDialog):
     def __init__(self, owner, list_all_engines, list_selected):
         title = _("Engines")
@@ -589,7 +598,7 @@ class WSelectEngines(LCDialog.LCDialog):
         layout = Colocacion.V().otro(ly_head).control(self.grid).margen(3)
         self.setLayout(layout)
 
-        self.restore_video(default_width=self.grid.width_columns_displayables() + 48, default_height=640)
+        self.restore_video(default_width=self.grid.width_and_vbar() + 28, default_height=640)
 
     def clear_all(self):
         self.st_selected = set()

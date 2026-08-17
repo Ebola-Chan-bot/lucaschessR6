@@ -1,4 +1,5 @@
 import os
+import sqlite3
 
 import FasterCode
 from PySide6 import QtCore
@@ -6,19 +7,17 @@ from PySide6 import QtCore
 from Code.Base import Position
 from Code.Board import Board
 from Code.Books import DBPolyglot, PolyglotImportExports
-from Code.QT import Colocacion, Columnas, Controles, Delegados, Grid, Iconos, LCDialog, QTDialogs
+from Code.QT import Colocacion, Columnas, Delegados, Grid, Iconos, LCDialog, FormLayout, QTDialogs, QTMessages
 from Code.Voyager import Voyager
 
 
 class WPolyglot(LCDialog.LCDialog):
-    def __init__(self, wowner, configuration, path_lcbin, position=None, is_white_bottom=None, position_provider=None):
+    def __init__(self, wowner, configuration, path_lcbin):
         self.title = os.path.basename(path_lcbin)[:-6]
         LCDialog.LCDialog.__init__(self, wowner, self.title, Iconos.Book(), "polyglot")
 
         self.configuration = configuration
         self.path_lcbin = path_lcbin
-        self.position_provider = position_provider
-        self.external_position_mode = position_provider is not None
 
         self.owner = wowner
 
@@ -29,16 +28,11 @@ class WPolyglot(LCDialog.LCDialog):
 
         self.li_moves = []
         self.history = []
-        self.sync_timer = None
 
-        self.board = None
-        if not self.external_position_mode:
-            conf_board = configuration.config_board("WPOLYGLOT", 48)
-            self.board = Board.Board(self, conf_board)
-            self.board.draw_window()
-            self.board.set_dispatcher(self.mensajero)
-            if is_white_bottom is not None:
-                self.board.set_side_bottom(is_white_bottom)
+        conf_board = configuration.config_board("WPOLYGLOT", 48)
+        self.board = Board.Board(self, conf_board)
+        self.board.draw_window()
+        self.board.set_dispatcher(self.mensajero)
         self.with_figurines = configuration.x_pgn_withfigurines
 
         o_columnas = Columnas.ListaColumnas()
@@ -81,45 +75,26 @@ class WPolyglot(LCDialog.LCDialog):
             edicion=Delegados.LineaTexto(is_integer=True),
         )
         self.grid_moves = Grid.Grid(self, o_columnas, is_editable=True)
-        self.grid_moves.setMinimumWidth(self.grid_moves.width_columns_displayables() + 20)
+        self.grid_moves.fix_min_width()
 
         self.tb = QTDialogs.LCTB(self)
         self.tb.new(_("Close"), Iconos.MainMenu(), self.finalize)
-        if not self.external_position_mode:
-            self.tb.new(_("Takeback"), Iconos.Atras(), self.takeback)
-            self.tb.new(_("Voyager"), Iconos.Voyager32(), self.voyager)
+        self.tb.new(_("Takeback"), Iconos.Atras(), self.takeback)
+
+        self.tb.new(_("Utilities"), Iconos.Utilidades(), self.utilities)
         self.tb.new(_("Import"), Iconos.Import8(), self.pol_import.importar)
-        # (_("Create book"), Iconos.BinBook(), self.pol_export.exportar),
-        # None,
         self.tb.new(_("Export"), Iconos.Export8(), self.pol_export.export)
 
-        ly2 = Colocacion.V().control(self.tb)
-        if self.external_position_mode:
-            self.lb_external = Controles.LB(self, _("Current position")).set_font_type(puntos=10)
-            ly2.control(self.lb_external)
-        ly2.control(self.grid_moves)
-
-        if self.external_position_mode:
-            layout = Colocacion.V().otro(ly2)
-        else:
-            layout = Colocacion.H().control(self.board).otro(ly2)
+        layout_left = Colocacion.V().control(self.tb).control(self.board).margen(0)
+        layout = Colocacion.H().otro(layout_left).control(self.grid_moves).margen(3)
         self.setLayout(layout)
 
         self.restore_video()
 
         self.position = None
-        initial_position = position.copia() if position is not None else self._provider_position()
-        if initial_position is None:
-            initial_position = Position.Position()
-            initial_position.set_pos_initial()
-        elif position is None and not self.external_position_mode:
-            initial_position.set_pos_initial()
-        self.set_position(initial_position, True)
-
-        if self.external_position_mode:
-            self.sync_timer = QtCore.QTimer(self)
-            self.sync_timer.timeout.connect(self.sync_with_external_position)
-            self.sync_timer.start(250)
+        position = Position.Position()
+        position.set_pos_initial()
+        self.set_position(position, True)
 
     def set_position(self, position, save_history):
         self.position = position
@@ -128,6 +103,7 @@ class WPolyglot(LCDialog.LCDialog):
         self.li_moves = [FasterCode.BinMove(info_move) for info_move in self.position.get_exmoves()]
 
         li = self.db_entries.get_entries(position.fen())
+
         d_entries = {entry.move: entry for entry in li}
 
         for binmove in self.li_moves:
@@ -143,17 +119,14 @@ class WPolyglot(LCDialog.LCDialog):
             binmove.porc = binmove.weight() * 100.0 / tt if tt > 0 else 0
 
         self.li_moves.sort(key=lambda x: x.weight(), reverse=True)
-        if self.board:
-            self.board.set_position(position)
-            self.board.activate_side(position.is_white)
+        self.board.set_position(position)
+        self.board.activate_side(position.is_white)
         if save_history:
             self.history.append(self.position.fen())
         self.grid_moves.refresh()
         self.grid_moves.gotop()
 
     def grid_doble_click(self, _grid, row, col):
-        if self.external_position_mode:
-            return
         if col.key == "move":
             bin_move = self.li_moves[row]
             xfrom = bin_move.info_move.xfrom()
@@ -162,8 +135,6 @@ class WPolyglot(LCDialog.LCDialog):
             self.mensajero(xfrom, xto, promotion)
 
     def grid_cambiado_registro(self, _grid, row, _obj_column):
-        if not self.board:
-            return
         if -1 < row < len(self.li_moves):
             bin_move = self.li_moves[row]
             self.board.put_arrow_sc(bin_move.info_move.xfrom(), bin_move.info_move.xto())
@@ -182,7 +153,7 @@ class WPolyglot(LCDialog.LCDialog):
             else:
                 return san
         elif key == "%":
-            return f"{move.porc:.1f}%" if move.porc > 0 else ""
+            return f"{move.porc:.2f}%" if move.porc > 0 else ""
         else:
             valor = move.get_field(key)
             return str(valor) if valor else ""
@@ -242,8 +213,6 @@ class WPolyglot(LCDialog.LCDialog):
         grid.refresh()
 
     def mensajero(self, from_sq, to_sq, promocion=""):
-        if self.external_position_mode:
-            return
         FasterCode.set_fen(self.position.fen())
         if FasterCode.make_move(from_sq + to_sq + promocion):
             fen = FasterCode.get_fen()
@@ -258,14 +227,10 @@ class WPolyglot(LCDialog.LCDialog):
         self.finalizar()
 
     def finalizar(self):
-        if self.sync_timer:
-            self.sync_timer.stop()
         self.db_entries.close()
         self.save_video()
 
     def takeback(self):
-        if self.external_position_mode:
-            return
         if len(self.history) > 1:
             self.history = self.history[:-1]
             fen = self.history[-1]
@@ -273,25 +238,58 @@ class WPolyglot(LCDialog.LCDialog):
             self.set_position(self.position, False)
 
     def voyager(self):
-        if self.external_position_mode:
-            return
         position, is_white_bottom = Voyager.voyager_position(self, self.position, wownerowner=self.owner)
         if position:
             self.set_position(position, True)
 
-    def _provider_position(self):
-        if not self.position_provider:
-            return None
-        resp = self.position_provider()
-        if not resp:
-            return None
-        position = resp[0] if isinstance(resp, tuple) else resp
-        return position.copia() if position is not None else None
+    def remove_moves(self):
+        form = FormLayout.FormLayout(self, _("Remove"), Iconos.Delete())
+        form.separador()
+        form.editbox(_("Moves with a weight of less than or equal to %"), 50, tipo=float, decimales=3,
+                     init_value=0.00)
+        form.separador()
 
-    def sync_with_external_position(self):
-        position = self._provider_position()
-        if position is None:
+        resp = form.run()
+        if not resp:
             return
-        if self.position and self.position.fen() == position.fen():
-            return
-        self.set_position(position, False)
+        accion, li_resp = resp
+        tope, = li_resp
+
+        with QTMessages.one_moment_please(self):
+            # self.db_entries.remove_entries(tope)
+            self.db_entries.close()
+
+            conn = sqlite3.connect(self.path_lcbin)
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                DELETE FROM BOOK 
+                WHERE (CKEY, WEIGHT) IN (
+                    SELECT b.CKEY, b.WEIGHT
+                    FROM BOOK b
+                    JOIN (
+                        SELECT CKEY, SUM(WEIGHT) as total_weight
+                        FROM BOOK
+                        GROUP BY CKEY
+                    ) t ON b.CKEY = t.CKEY
+                    WHERE b.WEIGHT <= (t.total_weight * {tope / 100.0})
+                )
+            """)
+
+            regs_removed = cursor.rowcount
+            conn.commit()
+            conn.close()
+
+            self.db_entries = DBPolyglot.DBPolyglot(self.path_lcbin)
+            self.db_entries.pack()
+            self.set_position(self.position, True)
+
+        QTMessages.message(self, f'{_("Deleted records")}: {regs_removed}')
+
+    def utilities(self):
+        menu = QTDialogs.LCMenu(self)
+        menu.opcion(self.voyager, _("Voyager"), Iconos.Voyager())
+        menu.separador()
+        menu.opcion(self.remove_moves, _("Remove moves by percentage"), Iconos.Delete())
+        resp = menu.lanza()
+        if resp:
+            resp()

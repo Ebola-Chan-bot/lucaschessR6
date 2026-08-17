@@ -3,14 +3,13 @@ import random
 import Code
 from Code.Menus import BaseMenu
 from Code.PlayAgainstEngine import (
-    Albums,
-    ManagerAlbum,
     ManagerPerson,
     ManagerPlayAgainstEngine,
-    WindowAlbumes,
     WPlayAgainstEngine,
     ConfigurationsPAE,
 )
+from Code.Base.Constantes import MENU_PLAY_BOTH, MENU_PLAY_ANY_ENGINE, MENU_PLAY_YOUNG_PLAYERS
+from Code.Albums import ManagerAlbum, Albums, WindowAlbumes
 from Code.PlayHuman import ManagerPlayHuman, WPlayHuman
 from Code.QT import Iconos, QTDialogs
 
@@ -19,20 +18,30 @@ class PlayMenu(BaseMenu.RootMenu):
     name = "Play"
 
     def add_options(self):
-        if Code.configuration.x_menu_play_config:
+        option = Code.configuration.x_menu_play
+        ok_any_engine = option in (MENU_PLAY_BOTH, MENU_PLAY_ANY_ENGINE)
+        ok_young = option in (MENU_PLAY_YOUNG_PLAYERS, MENU_PLAY_BOTH)
+        only_young = option == MENU_PLAY_YOUNG_PLAYERS
+
+        if ok_any_engine:
             pae = ConfigurationsPAE.ConfigurationsPAE()
             li_conf = pae.list_visible()
             if li_conf:
                 for conf, order, dic in li_conf:
                     self.new(f"free_{conf}", conf, Iconos.Engine2())
 
-        self.new("free", _("Play against an engine"), Iconos.Libre())
+        if ok_any_engine:
+            self.new("free", _("Play against an engine"), Iconos.Libre())
 
-        submenu = self.new_submenu(_("Opponents for young players"), Iconos.RivalesMP())
+        if ok_young:
+            if only_young:
+                submenu = self
+            else:
+                submenu = self.new_submenu(_("Opponents for young players"), Iconos.RivalesMP())
+            self.menu_youngs(submenu)
 
-        self.menu_youngs(submenu)
-
-        self.new("human", _("Play human vs human"), Iconos.HumanHuman())
+        if ok_any_engine:
+            self.new("human", _("Play human vs human"), Iconos.HumanHuman())
 
     @staticmethod
     def menu_youngs(submenu: BaseMenu.SubMenu) -> None:

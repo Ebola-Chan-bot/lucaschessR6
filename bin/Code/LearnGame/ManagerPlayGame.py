@@ -1,4 +1,5 @@
 import time
+from PySide6 import QtCore
 
 import FasterCode
 
@@ -16,7 +17,7 @@ from Code.Base.Constantes import (
     TB_QUIT,
     TB_REINIT,
     TB_UTILITIES,
-    TB_ADJUDICATOR
+    TB_ADJUDICATOR,
 )
 from Code.LearnGame import WindowPlayGame
 from Code.ManagerBase import Manager
@@ -84,7 +85,9 @@ class ManagerPlayGame(Manager.Manager):
         self.is_save = False
         self.min_mstime = 5000
 
-        self.adjudicator = Adjudicator.Adjudicator(self, self.main_window, self.name_obj_common(), self.player_has_moved)
+        self.adjudicator = Adjudicator.Adjudicator(
+            self, self.main_window, self.name_obj_common(), self.player_has_moved
+        )
 
         self.puntosMax = 0
         self.puntos = 0
@@ -128,10 +131,10 @@ class ManagerPlayGame(Manager.Manager):
         self.set_label2(
             f'{lb_score}:<table border="1" cellpadding="5" cellspacing="0" style="margin-left:60px">'
             f'<tr><td align="right">{self.name_obj_common()}</td><td align="right"><b>{self.puntos:+d}'
-            f'</b></td></tr>'
+            f"</b></td></tr>"
             f'<tr><td align="right">{self.manager_analyzer.name}</td>'
             f'<td align="right"><b>{-self.puntosMax:+d}</b></td>'
-            '</tr></table>'
+            "</tr></table>"
         )
 
     def run_action(self, key):
@@ -194,7 +197,7 @@ class ManagerPlayGame(Manager.Manager):
         self.adjudicator.analyze_end()
         self.show_info_extra()
 
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def valid_mrm(self, pv_usu, pv_obj, mrm_actual):
         move = self.game_obj.move(self.pos_move_obj)
@@ -234,17 +237,12 @@ class ManagerPlayGame(Manager.Manager):
 
         if is_turn_human:
             self.human_is_playing = True
-            if self.auto_rotate:
-                if is_white != self.board.is_white_bottom:
-                    self.board.rotate_board()
-
-            self.human_is_playing = True
             self.activate_side(is_white)
             self.initial_time = time.time()
             self.adjudicator.analyze_begin(self.game)
         else:
             self.add_move(False)
-            self.play_next_move()
+            QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def check_book(self, fen, from_sq, to_sq):
         if self.book.check_human(fen, from_sq, to_sq):
@@ -332,7 +330,7 @@ class ManagerPlayGame(Manager.Manager):
         )
 
         self.add_move(True, comment, analysis, same_move=same_move)
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
         return True
 
     def add_move(self, is_player_move, comment=None, analysis=None, same_move=False):

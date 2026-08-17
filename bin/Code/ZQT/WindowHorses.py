@@ -1,4 +1,3 @@
-import atexit
 import datetime
 import random
 import time
@@ -26,8 +25,6 @@ class HorsesHistorico:
         self.dbf.leer()
 
         self.orden = "FECHA", "DESC"
-
-        atexit.register(self.close)
 
     def close(self):
         if self.dbf:
@@ -121,7 +118,7 @@ class WHorsesBase(LCDialog.LCDialog):
         o_columns.nueva("SECONDS", _("Second(s)"), 80, align_center=True)
         o_columns.nueva("HINTS", _("Hints"), 90, align_center=True)
         self.ghistorico = Grid.Grid(self, o_columns, complete_row_select=True, select_multiple=True)
-        self.ghistorico.setMinimumWidth(self.ghistorico.width_columns_displayables() + 20)
+        self.ghistorico.fix_min_width()
 
         # Tool bar
         li_acciones = (
@@ -405,8 +402,7 @@ class WHorses(LCDialog.LCDialog):
     def get_help(self):
         self.hints += 1
         self.board.remove_arrows()
-        self.pon_siguiente()
-        pa = self.camino[0 if self.base_unica else self.current_position]
+        pa = self.pos_temporal
         ps = self.camino[self.current_position + 1]
         tlist = FasterCode.li_n_min(pa, ps, self.celdas_ocupadas)
         if self.nayuda >= len(tlist):

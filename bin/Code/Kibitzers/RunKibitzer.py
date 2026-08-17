@@ -88,14 +88,14 @@ class CPU:
             orden = Orden()
             orden.key = dv["__CLAVE__"]
             orden.dv = dv
-            
+
             if orden.key == KIBRUN_GAME:
                 if self.ipc.has_more_data():
                     continue
                 time.sleep(0.1)
                 if self.ipc.has_more_data():
                     continue
-            
+
             return orden
 
     def reprocesa(self):
@@ -157,9 +157,13 @@ class CPU:
                 self.last_move = game.remove_only_last_movement()
             if self.tipo == KIB_THREATS:
                 last_position = game.last_position
-                last_position.is_white = not last_position.is_white
-                game_threat = Game.Game(first_position=last_position)
-                self.ventana.orden_game_original(game_threat)
+                if not last_position.is_check():
+                    last_position.is_white = not last_position.is_white
+                    game_threat = Game.Game(first_position=last_position)
+                    self.ventana.orden_game_original(game_threat)
+                else:
+                    self.ventana.bad_threats_position(last_position)
+                #     self.ventana.orden_game_original(game)
             else:
                 self.ventana.orden_game_original(game)
 

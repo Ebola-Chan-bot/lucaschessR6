@@ -1,8 +1,9 @@
 import os
 import os.path
+import sqlite3
+import subprocess
 from typing import List, Tuple
-
-from PySide6 import QtCore
+from typing import Optional
 
 import Code
 from Code.Base.Constantes import BOOK_BEST_MOVE, ENG_EXTERNAL, MULTIPV_MAXIMIZE, MULTIPV_BYDEFAULT
@@ -29,6 +30,7 @@ class Engine:
         self.parent_external = None
         self.url = url
         self.path_exe = Util.relative_path(path_exe) if path_exe else ""
+        self.path_exe = Util.bug_path(self.path_exe)
         self.elo = 0
         self.id_info = ""
         self.max_depth = 0
@@ -99,6 +101,7 @@ class Engine:
             try:
                 if conf_parent := Code.configuration.engines.dic_engines().get(self.parent_external):
                     self.path_exe = conf_parent.path_exe
+                    self.path_exe = Util.bug_path(self.path_exe)
             except AttributeError:
                 pass
         previous = os.path.abspath(os.curdir)
@@ -169,8 +172,6 @@ class Engine:
                             is_changed = True
                     else:
                         is_changed = True
-                    if op.name == "MultiPV":
-                        self.set_multipv(valor, op.maximo)
                     break
         for pos, (xcomando, xvalor) in enumerate(self.liUCI):
             if xcomando == name:
@@ -236,6 +237,7 @@ class Engine:
         self._name = value
 
     def ejecutable(self):
+        self.path_exe = Util.bug_path(self.path_exe)
         return self.path_exe
 
     def remove_uci_options(self):
@@ -246,7 +248,7 @@ class Engine:
 
     def key_engine(self):
         if self.type != ENG_EXTERNAL:
-            return "maia" if self.key.startswith("maia") else self.key
+            return "maia" if self.key.startswith("maia-") else self.key
         stat = os.stat(self.path_exe)
         return f"{os.path.basename(self.path_exe)}_{stat.st_size}_{stat.st_mtime}"
 
@@ -264,7 +266,11 @@ class Engine:
             else:
                 lines = get_uci_options(self.path_exe)
                 if lines:
-                    dbuci[key] = "\n".join(lines)
+                    try:
+                        dbuci[key] = "\n".join(lines)
+                    except sqlite3.IntegrityError:
+                        pass
+
                 else:
                     lines = []  # Ensure lines is always an iterable
 
@@ -331,25 +337,25 @@ class Engine:
         return hash(self.key + self.key)
 
     def list_to_show(self, wowner):
-        li: list = [f'{_("Name")} = {self.name}', f'{_("Key")} = {self.key}']
+        li: list = [f"{_('Name')} = {self.name}", f"{_('Key')} = {self.key}"]
         if self.key != self.key:
-            li.append(f'{_("Alias")} = {self.key}')
-        li.append(f'{self.path_exe}')
+            li.append(f"{_('Alias')} = {self.key}")
+        li.append(f"{self.path_exe}")
         if dic_options := {uci.name: uci.valor for uci in self.li_uci_options() if uci.valor}:
             li_opt = []
             li_opt.extend(f"{name} = {valor}" for name, valor in dic_options.items())
             li.append((_("Options"), li_opt))
         if self.multiPV:
-            li.append(f'{_("Number of variations evaluated by the engine (MultiPV)")} = {self.multiPV}')
+            li.append(f"{_('Number of variations evaluated by the engine (MultiPV)')} = {self.multiPV}")
 
         if self.max_depth or self.max_time or self.nodes:
             li_limits = []
             if self.max_depth:
-                li_limits.append(f'{_("Fixed depth")} = {self.max_depth}')
+                li_limits.append(f"{_('Fixed depth')} = {self.max_depth}")
             if self.max_time:
-                li_limits.append(f'{_("Fixed time in seconds")} = {self.max_time:.01f}')
+                li_limits.append(f"{_('Fixed time in seconds')} = {self.max_time:.01f}")
             if self.nodes:
-                li_limits.append(f'{_("Fixed nodes")} = {self.nodes}')
+                li_limits.append(f"{_('Fixed nodes')} = {self.nodes}")
             li.append((_("Limits of engine thinking"), li_limits))
         menu = QTDialogs.LCMenuRondo(wowner)
         for opt in li:
@@ -395,8 +401,8 @@ class OpcionUCI:
 
         self.name = txt[11:n].strip()
 
-        if self.name.lower() == "ponder":
-            return False
+        # if self.name.lower() == "ponder":
+        #     return False
 
         li = txt[n:].split(" ")
         self.tipo = li[1]
@@ -552,36 +558,72 @@ def read_engine_uci(exe, args=None):
     return engine
 
 
-def _run_uci_command(path_exe) -> str | None:
+def _run_uci_command(path_exe: str) -> Optional[str]:
+    path_exe = os.path.abspath(path_exe)
     if not os.path.isfile(path_exe):
         return None
 
-    process = QtCore.QProcess()
-    process.setProgram(path_exe)
-    process.setArguments([])
-    process.setWorkingDirectory(os.path.dirname(path_exe))
-    process.start()
+    size = Util.filesize(path_exe)
+    timeout = max(10, size * 10 // 5000000)
 
-    if not process.waitForStarted(2000):
-        return None
+    direxe = os.path.dirname(path_exe)
 
-    process.write(b"uci\n")
+    if Util.is_windows():
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        env = None
+    else:
+        startupinfo = None
+        # Preservar LD_LIBRARY_PATH existente y añadir directorio del motor
+        ld_library = os.environ.get("LD_LIBRARY_PATH", "")
+        parts = [p for p in ld_library.split(":") if p]
+        parts.insert(0, os.path.abspath(direxe))
+        # También añadir ./lib si existe (común en algunos motores)
+        lib_path = os.path.join(direxe, "lib")
+        if os.path.isdir(lib_path):
+            parts.insert(0, os.path.abspath(lib_path))
 
-    buffer = ""
-    ok = False
-    for __ in range(30):
-        if process.waitForReadyRead(100):
-            chunk = process.readAllStandardOutput().data().decode("utf-8", errors="ignore")
-            buffer += chunk
-            if "uciok" in buffer:
-                ok = True
+        env = {**os.environ, "LD_LIBRARY_PATH": ":".join(parts)}
+
+        if "PATH" in env:
+            env["PATH"] = f"{direxe}:{env['PATH']}"
+
+    try:
+
+        result = subprocess.run(
+            [path_exe],
+            input="uci\nquit\n",
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=direxe,
+            env=env,
+            startupinfo=startupinfo,
+            errors='ignore'
+        )
+
+        # Extraer respuesta UCI
+        output = result.stdout
+        if not output:
+            return None
+
+        # Buscar hasta "uciok"
+        lines = output.splitlines()
+        uci_lines = []
+        for line in lines:
+            line = line.strip()
+            if line == "uciok":
                 break
-        if process.state() == QtCore.QProcess.ProcessState.NotRunning:
-            break
+            if line and line.startswith(("id ", "option ")):
+                uci_lines.append(line)
 
-    process.kill()
-    process.waitForFinished(200)
-    return buffer if ok else None
+        return "\n".join(uci_lines) if uci_lines else None
+
+    except subprocess.TimeoutExpired:
+        return None
+    except (subprocess.SubprocessError, OSError, IOError):
+        return None
 
 
 def is_valid_engine(path_exe) -> bool:

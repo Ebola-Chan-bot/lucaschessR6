@@ -2,7 +2,7 @@ import os
 
 import Code
 from Code.Board import WBoardColors
-from Code.Config import WindowConfig
+from Code.Config import WindowConfig, WindowUsuarios
 from Code.Menus import BaseMenu
 from Code.QT import Iconos, SelectFiles, WColors
 from Code.Shortcuts import Shortcuts, WShortcuts
@@ -56,9 +56,11 @@ class OptionsMenu(BaseMenu.RootMenu):
             self.reiniciar()
 
     def cambiaconfiguration(self):
+        dic_previo = Code.configuration.read_dic_x()
         if WindowConfig.options(self.wparent, Code.configuration):
             Code.configuration.graba()
-            self.reiniciar()
+            if Code.configuration.needs_reinit(dic_previo):
+                self.reiniciar()
 
     def edit_board_colors(self):
         w = WBoardColors.WBoardColors(self.procesador.board)
@@ -94,6 +96,9 @@ class OptionsMenu(BaseMenu.RootMenu):
 
     def users(self):
         self.procesador.users()
+
+    def set_password(self):
+        WindowUsuarios.set_password(self.procesador)
 
     def run_select(self, resp):
         getattr(self, resp)()

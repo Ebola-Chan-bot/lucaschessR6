@@ -105,11 +105,11 @@ class WWashing(LCDialog.LCDialog):
 
             html = html % (
                 _("Hints"),
-                "%d (%0.02f)" % (hints, hints * 1.0 / n_engines),
+                "%d (%0.02f)" % (hints, hints * 1.0 / n_engines) if n_engines else "0 (0.00)",
                 _("Repetitions"),
-                "%d (%0.02f)" % (games, games * 1.0 / n_engines),
+                "%d (%0.02f)" % (games, games * 1.0 / n_engines) if n_engines else "0 (0.00)",
                 _("Time"),
-                f"{Util.secs2str(times)} ({Util.secs2str(int(times / n_engines))})",
+                f"{Util.secs2str(times)} ({Util.secs2str(int(times / n_engines))})" if n_engines else "00:00 (00:00)",
             )
 
         else:
@@ -163,8 +163,7 @@ class WWashing(LCDialog.LCDialog):
         o_columns.nueva("INDEX", _("Index"), 60, align_center=True)
 
         self.grid = grid = Grid.Grid(self, o_columns, complete_row_select=True)
-        n_ancho_pgn = self.grid.width_columns_displayables() + 20
-        self.grid.setMinimumWidth(n_ancho_pgn)
+        n_ancho_pgn = self.grid.fix_min_width()
         self.register_grid(grid)
 
         ly0 = Colocacion.V().control(self.grid)

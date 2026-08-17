@@ -1,3 +1,5 @@
+
+from PySide6 import QtCore
 from Code.Base import Move
 from Code.Base.Constantes import (
     GT_RESISTANCE,
@@ -30,7 +32,7 @@ class ManagerResistance(Manager.Manager):
     is_battle: bool
     movements_rival: int
     manager_adjudicator: EngineManagerPlay.EngineManagerPlay
-    
+
     def start(self, resistance, num_engine, str_side):
 
         self.game_type = GT_RESISTANCE
@@ -135,7 +137,7 @@ class ManagerResistance(Manager.Manager):
         elif str_side == TB_CLOSE:
             self.procesador.close_engines()
             self.procesador.start()
-            tm = TrainMenu.TrainMenu(self)
+            tm = TrainMenu.TrainMenu(self.procesador)
             tm.run_exec(f"resistance{self.resistance.tipo}")
 
         elif str_side == TB_REINIT:
@@ -199,9 +201,12 @@ class ManagerResistance(Manager.Manager):
             puntos_rival_previo = self.rival_points
 
             self.rm_rival = self.manager_rival.play(self.game)
+            self.thinking(False)
+            if self.manager_rival.is_closed:
+                return
+
             self.rival_points = self.rm_rival.centipawns_abs()
             self.put_current_label()
-            self.thinking(False)
 
             if self.rival_has_moved(self.rm_rival):
                 self.movements_rival += 1
@@ -210,10 +215,9 @@ class ManagerResistance(Manager.Manager):
                     if (self.rival_points > self.puntos) or (self.maxerror and lostmovepoints > self.maxerror):
                         if self.verify():
                             return
-                self.play_next_move()
+                QtCore.QTimer.singleShot(0, self.play_next_move)
 
         else:
-
             self.human_is_playing = True
             self.activate_side(is_white)
 
@@ -221,10 +225,9 @@ class ManagerResistance(Manager.Manager):
         if len(self.game) < (3 if self.is_engine_side_white else 4):
             return False
         if self.manager_rival.engine.key != self.manager_adjudicator.engine.key:
-
             with QTMessages.WaitingMessage(self.main_window, _("Checking...")):
                 rm1 = self.manager_adjudicator.play(self.game)
-                self.rival_points = -rm1.centipawns_abs()   # el movimiento del rival está ya en game
+                self.rival_points = -rm1.centipawns_abs()  # el movimiento del rival está ya en game
                 self.put_current_label()
                 if self.maxerror:
                     game1 = self.game.copia()
@@ -295,6 +298,7 @@ class ManagerResistance(Manager.Manager):
             self.set_toolbar(li_options)
         else:
             self.run_action(TB_CLOSE)
+            # QtCore.QTimer.singleShot(0, partial(self.run_action, TB_CLOSE))
 
         return True
 
@@ -307,7 +311,7 @@ class ManagerResistance(Manager.Manager):
 
         self.add_move(move, True)
         self.movimientos += 1
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
         return True
 
     def add_move(self, move, is_player_move):

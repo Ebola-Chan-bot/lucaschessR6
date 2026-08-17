@@ -55,7 +55,7 @@ class WFactoryPolyglots(LCDialog.LCDialog):
         self.setLayout(ly)
 
         self.register_grid(self.glista)
-        self.restore_video(default_width=self.glista.width_columns_displayables() + 20, default_height=324)
+        self.restore_video(default_width=self.glista.width_and_vbar(), default_height=324)
 
         self.glista.gotop()
 
@@ -166,17 +166,6 @@ def polyglots_factory(procesador):
     return w.resultado if w.exec() else None
 
 
-def edit_polyglot(procesador, path_dbbin, position=None, is_white_bottom=None, position_provider=None, modal=True):
-    w = WPolyglot.WPolyglot(
-        procesador.main_window,
-        Code.configuration,
-        path_dbbin,
-        position=position,
-        is_white_bottom=is_white_bottom,
-        position_provider=position_provider,
-    )
-    if modal:
-        w.exec()
-    else:
-        w.show()
-    return w
+def edit_polyglot(procesador, path_dbbin):
+    w = WPolyglot.WPolyglot(procesador.main_window, Code.configuration, path_dbbin)
+    w.exec()

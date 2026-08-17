@@ -49,31 +49,31 @@ QHeaderView::section
 /* QPUSHBUTTON ---------------------------------------------------------------------------*/
 QPushButton
 {
-	background-color: #e0e0e0;
-	color: #000000;
-	border-style: solid;
-	border-width: 2px;
-	border-radius: 4px;
-	border-color: #808080;
-	padding: 4px;
+    background-color: #e0e0e0;
+    color: #000000;
+    border-style: solid;
+    border-width: 2px;
+    border-radius: 4px;
+    border-color: #808080;
+    padding: 4px;
 }
 QPushButton:flat
 {
-	background-color: transparent;
-	border: none;
-	color: #808080;
-	padding: 0px;
+    background-color: transparent;
+    border: none;
+    color: #808080;
+    padding: 0px;
 }
 QPushButton::disabled
 {
-	background-color: transparent;
-	color: #656565;
-	border-color: #051a39;
+    background-color: transparent;
+    color: #656565;
+    border-color: #051a39;
 
 }
 QPushButton::pressed
 {
-	background-color: #c0c0c0;
+    background-color: #c0c0c0;
 }
 
 /* LABEL ---------------------------------------------------------------------------------*/
@@ -303,9 +303,9 @@ QComboBox::drop-down
 }
 QComboBox::disabled
 {
-	background-color: #fafafa;
-	color: #656565;
-	border-color: #909090;
+    background-color: #fafafa;
+    color: #656565;
+    border-color: #909090;
 
 }
 QComboBox:hover
@@ -316,10 +316,10 @@ QComboBox:hover
 
 QComboBox::down-arrow
 {
-	image: url("../Resources/Styles/icons8_chevron_down_16px.png");
-	width:8px;
-	height:8px;
-	border: none;
+    image: url("../Resources/Styles/icons8_chevron_down_16px.png");
+    width:8px;
+    height:8px;
+    border: none;
 }
 
 /* PROGRESSBAR -------------------------------------------------------------------------------*/
@@ -339,4 +339,33 @@ QProgressBar::chunk {
         stop:1 rgba(176, 224, 230, 0.8)
     );
     border-radius: 5px;
+}
+
+/* TREEVIEW ---------------------------------------------------------------------------------*/
+QTreeWidget[type="102"] {
+        background-color: #fafafa;
+        alternate-background-color: #f2f2f2;
+        selection-background-color: #cce0f5;
+        selection-color: #1a1a1a;
+        border: 1px solid #d6d6d6;
+        outline: 0;
+        color: #2c2c2c;
+}
+
+QTreeWidget[type="102"]::item {
+    padding: 4px;
+}
+
+QTreeWidget[type="102"]::item:hover {
+    background-color: #e6f0fa;
+}
+
+QHeaderView[type="102"]::section {
+    background-color: #e8e8e8;
+    color: #3a3a3a;
+    padding: 6px;
+    border: none;
+    border-right: 1px solid #d6d6d6;
+    border-bottom: 1px solid #d6d6d6;
+    font-weight: bold;
 }

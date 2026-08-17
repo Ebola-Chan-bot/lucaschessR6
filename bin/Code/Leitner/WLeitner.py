@@ -25,7 +25,7 @@ class WLeitner(LCDialog.LCDialog):
         o_columns.nueva("ERRORS", _("Errors"), 100, align_center=True)
 
         self.grid = Grid.Grid(self, o_columns, complete_row_select=True, select_multiple=True)
-        self.grid.setMinimumWidth(self.grid.width_columns_displayables() + 20)
+        self.grid.fix_min_width()
 
         # Toolbar
         self.tb = Controles.TBrutina(self)
@@ -103,6 +103,7 @@ class WLeitner(LCDialog.LCDialog):
         self.tb.clear()
         self.tb.new(_("Close"), Iconos.MainMenu(), self.finalize)
         self.tb.new(_("New"), Iconos.Nuevo(), self.create_training)
+        self.tb.new(_("Train"), Iconos.Entrenar(), self.train)
         if self.grid.reccount():
             self.tb.new(_("Copy"), Iconos.Copiar(), self.copy)
             self.tb.new(_("Remove"), Iconos.Borrar(), self.borrar)
@@ -131,6 +132,13 @@ class WLeitner(LCDialog.LCDialog):
             self.result_recno = None
             self.reject()
 
+    def train(self):
+        if self.grid.reccount() == 0:
+            self.create_training()
+            if self.grid.reccount() == 0:
+                return
+        self.run_selected()
+
     def run_selected(self):
         row = self.grid.recno()
         if row < 0:
@@ -144,7 +152,3 @@ class WLeitner(LCDialog.LCDialog):
 
     def closeEvent(self, arg__1, /):
         self.finalizar(False)
-
-
-
-

@@ -4,7 +4,9 @@ from typing import Callable, Optional
 from PySide6 import QtCore
 
 import Code
-from Code.Z import Util, Debug
+from Code.Z import Util
+if __debug__:
+    from Code import Debug
 from Code.Engines import EngineResponse, EngineRun, Engines, Priorities
 from Code.SQL import UtilSQL
 
@@ -24,7 +26,7 @@ class EngineManager:
         self._is_canceled = False
         self.elapsed_time = QtCore.QElapsedTimer()
 
-        self.fichero_log: Optional[str] = None
+        self.path_log: Optional[str] = None
 
         self.mrm: Optional[EngineResponse.MultiEngineResponse] = None
         self.bestmove: Optional[str] = None
@@ -137,8 +139,11 @@ class EngineManager:
         config_enginerun.args = self.engine.argumentos()
         config_enginerun.li_options_uci = self.engine.liUCI
         config_enginerun.faster_mode_always = self.allways_faster_mode
+        config_enginerun.priority = self.priority
         if self.engine.emulate_movetime:
             config_enginerun.emulate_movetime = True
+        if Code.list_engine_managers.with_logs:
+            config_enginerun.path_log = self.set_path_log()
 
         self.engine_run = EngineRun.EngineRun(config_enginerun)
         if self.engine_run.state == EngineRun.EngineState.INVALID_ENGINE:
@@ -159,8 +164,6 @@ class EngineManager:
     def stop(self):
         if self.engine_run:
             if __debug__:
-                from Code import Debug
-
                 Debug.prln(f"EngineManager.stop() called for {self.engine.name}", color="yellow")
             self.engine_run.stop()
 
@@ -168,8 +171,6 @@ class EngineManager:
         if self.is_closed:
             return
         if __debug__:
-            from Code import Debug
-
             Debug.prln(f"EngineManager.close() called for {self.engine.name} {self.huella}", color="yellow")
         self.is_closed = True
 
@@ -194,26 +195,35 @@ class EngineManager:
                 pass
             self.cache_analysis = None
 
-    def log_open(self):
-        if self.fichero_log:
-            return
+        if Code.list_engine_managers:
+            Code.list_engine_managers.cleanup_closed()
+            
+    def set_path_log(self):
         carpeta = Util.opj(Code.configuration.paths.folder_userdata(), "EngineLogs")
         if not os.path.isdir(carpeta):
             Util.create_folder(carpeta)
         plantlog = f"{Util.opj(carpeta, self.engine.name)}_%05d"
         pos = 1
-        nomlog = plantlog % pos
+        path_log = plantlog % pos
 
-        while os.path.isfile(nomlog):
+        while os.path.isfile(path_log):
             pos += 1
-            nomlog = plantlog % pos
-        self.fichero_log = nomlog
+            path_log = plantlog % pos
+
+        self.path_log = path_log
+            
+        return path_log
+
+    def log_open(self):
+        if self.path_log:
+            return
+        self.set_path_log()
 
         if self.engine_run:
-            self.engine_run.log_open(nomlog)
+            self.engine_run.log_open(self.path_log)
 
     def log_close(self):
-        self.fichero_log = None
+        self.path_log = None
         if self.engine_run:
             self.engine_run.log_close()
 
@@ -224,8 +234,7 @@ class EngineManager:
 
     def get_current_mrm(self) -> EngineResponse.MultiEngineResponse | None:
         if self.engine_run:
-            mrm = self.engine_run.get_mrm()
-            return mrm.clone() if mrm is not None else None
+            return self.engine_run.get_mrm()
         return None
 
     def is_run_fixed(self):
@@ -233,6 +242,9 @@ class EngineManager:
 
     def is_run_fast(self):
         return self.run_engine_params.is_fast()
+
+    def mstime_run(self):
+        return self.run_engine_params.fixed_ms
 
     def update_time_run(self, time_secs_white, time_secs_black, inc_time_secs_move):
         self.run_engine_params.update_var_time(time_secs_white, time_secs_black, inc_time_secs_move)

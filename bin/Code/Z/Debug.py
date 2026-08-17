@@ -8,8 +8,9 @@ import inspect
 
 from Code.Z import Util
 
-DEBUG_ENGINES = False
-DEBUG_ENGINES_SEND = False
+DEBUG_ENGINES_ALL = False
+DEBUG_ENGINES = False or DEBUG_ENGINES_ALL
+DEBUG_ENGINES_SEND = False or DEBUG_ENGINES_ALL
 COLORS = {
     "red": "\033[91m",
     "green": "\033[92m",
@@ -24,10 +25,7 @@ COLORS = {
 def pr(*x):
     lx = len(x) - 1
     for n, cl in enumerate(x):
-        if isinstance(cl, (str, int, float, bool, type(None))):
-            sys.stdout.write(str(cl))
-        else:
-            sys.stdout.write(cl)
+        sys.stdout.write(str(cl))
 
         if n < lx:
             sys.stdout.write(" ")
@@ -97,6 +95,7 @@ def timeit(func):
 
 setattr(builtins, "stack", stack)
 setattr(builtins, "stack0", stack0)
+setattr(builtins, "prln", prln)
 
 
 class LogDebug:

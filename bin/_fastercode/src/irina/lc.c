@@ -1,5 +1,6 @@
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 
 #include "defs.h"
 #include "protos.h"
@@ -39,7 +40,7 @@ int pgn2pv(char *pgn, char * pv)
             if(*c == 'O'){
                 piece = 'K';
                 from_AH = 'e';
-                to_AH = (strlen(pgn)==3) ? 'g':'c';
+                to_AH = (pgn[3] == '-') ? 'c':'g';
                 from_18 = (board.color) ? '8':'1';
                 to_18 = from_18;
                 break;
@@ -119,7 +120,7 @@ int pgn2pv(char *pgn, char * pv)
         return ERROR_MOVE;
     }
 
-    if ( !to_18 ) {
+    if ( !to_AH ) {
         to_18 = from_18;
         to_AH = from_AH;
         from_18 = 0;
@@ -146,7 +147,7 @@ int pgn2pv(char *pgn, char * pv)
             if( move.promotion && NAMEPZ[move.promotion] != promotion ) continue;
             if( promotion && !move.promotion ) continue;
             sprintf(pv, "%s%s", POS_AH[move.from], POS_AH[move.to]);
-            if( promotion ) sprintf(pv, "%s%c", pv, promotion);
+            if( promotion ) sprintf(pv + 4, "%c", promotion);
             return k;
         }
     }
@@ -186,8 +187,12 @@ void get_move( int num, char * pv )
 {
     MoveBin move;
     move = board.moves[num];
-    sprintf(pv, "%c%s%s", NAMEPZ[move.piece], POS_AH[move.from], POS_AH[move.to]);
-    if( move.promotion ) sprintf(pv, "%s%c", pv, tolower(NAMEPZ[move.promotion]));
+
+    if( move.promotion ) {
+        sprintf(pv, "%c%s%s%c", NAMEPZ[move.piece], POS_AH[move.from], POS_AH[move.to], tolower(NAMEPZ[move.promotion]));
+    } else {
+        sprintf(pv, "%c%s%s", NAMEPZ[move.piece], POS_AH[move.from], POS_AH[move.to]);
+    }
 }
 
 int search_move( char *desde, char *hasta, char * promotion )
@@ -205,7 +210,9 @@ int search_move( char *desde, char *hasta, char * promotion )
     for (i = from_moves; i < toMoves; i++) {
         move = board.moves[i];
         if ( move.from == from && move.to == to ) {
-            if( move.promotion && tolower(NAMEPZ[move.promotion]) != tolower(promotion[0]) ) continue;
+            unsigned char p1 = move.promotion ? tolower(NAMEPZ[move.promotion]) : 0;
+            unsigned char p2 = promotion[0] ? tolower(promotion[0]) : 0;
+            if (p1 != p2) continue;
             return i;
         }
     }
@@ -221,7 +228,6 @@ void get_move_ex( int num, char * info )
 
     move = board.moves[num];
 
-    sprintf(info, "%c%s%s", NAMEPZ[move.piece], POS_AH[move.from], POS_AH[move.to]);
     if( move.promotion ) promotion = tolower(NAMEPZ[move.promotion]);
     else promotion = ' ';
 
@@ -234,7 +240,10 @@ void get_move_ex( int num, char * info )
 
     if (move.capture) capture = NAMEPZ[move.capture];
     else capture = ' ';
-    sprintf(info, "%s%c%c%c%c", info, promotion, castle, en_passant, capture);
+
+    sprintf(info, "%c%s%s%c%c%c%c",
+            NAMEPZ[move.piece], POS_AH[move.from], POS_AH[move.to],
+            promotion, castle, en_passant, capture);
 }
 
 char * to_san(int num, char *san_move)
@@ -258,16 +267,18 @@ char * to_san(int num, char *san_move)
     // Pawns
     else if( (move.piece == WHITE_PAWN || move.piece == BLACK_PAWN)) {
         if( move.capture ) {
-            sprintf(san_move, "%cx%s", POS_AH[move.from][0], POS_AH[move.to]);
+            if( move.promotion ) {
+                sprintf(san_move, "%cx%s=%c", POS_AH[move.from][0], POS_AH[move.to], toupper(NAMEPZ[move.promotion]));
+            } else {
+                sprintf(san_move, "%cx%s", POS_AH[move.from][0], POS_AH[move.to]);
+            }
         }
         else  {
-            sprintf(san_move, "%s", POS_AH[move.to]);
-        }
-//        if( move.is_ep ){
-//            sprintf(san_move, "%s e.p.", san_move);
-//        }
-        if( move.promotion ) {
-            sprintf(san_move, "%s=%c", san_move, toupper(NAMEPZ[move.promotion]));
+            if( move.promotion ) {
+                sprintf(san_move, "%s=%c", POS_AH[move.to], toupper(NAMEPZ[move.promotion]));
+            } else {
+                sprintf(san_move, "%s", POS_AH[move.to]);
+            }
         }
     }
 
@@ -284,20 +295,21 @@ char * to_san(int num, char *san_move)
                 }
             }
         }
-        sprintf(san_move,"%c", toupper(NAMEPZ[move.piece]));
-        if( is_amb_ah ) sprintf(san_move,"%s%c", san_move, POS_AH[move.from][0]);
-        if( is_amb_18 ) sprintf(san_move,"%s%c", san_move, POS_AH[move.from][1]);
-        if(move.capture) sprintf(san_move,"%sx", san_move);
-        sprintf(san_move,"%s%s", san_move, POS_AH[move.to]);
+
+        int offset = sprintf(san_move, "%c", toupper(NAMEPZ[move.piece]));
+        if( is_amb_ah ) offset += sprintf(san_move + offset, "%c", POS_AH[move.from][0]);
+        if( is_amb_18 ) offset += sprintf(san_move + offset, "%c", POS_AH[move.from][1]);
+        if( move.capture ) offset += sprintf(san_move + offset, "x");
+        sprintf(san_move + offset, "%s", POS_AH[move.to]);
     }
 
     // Check + Mate
     make_move(move);
     if( incheck() ){
         if(!movegen()){
-            sprintf(san_move,"%s#", san_move);
+            strcat(san_move, "#");
         } else {
-            sprintf(san_move,"%s+", san_move);
+            strcat(san_move, "+");
         }
     }
     unmake_move();

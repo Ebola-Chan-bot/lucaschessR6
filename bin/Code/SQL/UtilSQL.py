@@ -151,7 +151,10 @@ class DictSQL(object):
                 if self.li_breplaces_pickle:
                     for btxt_wrong, btxt_correct in self.li_breplaces_pickle:
                         dato = dato.replace(btxt_wrong, btxt_correct)
-                    dic[key] = pickle.loads(dato)
+                    try:
+                        dic[key] = pickle.loads(dato)
+                    except AttributeError:
+                        pass
         cursor.close()
         return dic
 
@@ -263,7 +266,7 @@ class ListSQL:
         if self.is_reversed:
             sql += " ORDER BY ROWID DESC"
         cursor = self._conexion.execute(sql)
-        resp = [rowid for rowid, in cursor.fetchall()]
+        resp = [rowid for (rowid,) in cursor.fetchall()]
         cursor.close()
         return resp
 
@@ -424,12 +427,12 @@ class ListSQLBig(object):
 
 class ListObjSQL(ListSQL):
     def __init__(
-            self,
-            path_file: str,
-            class_storage: Type,
-            tabla: str = "datos",
-            max_cache: int = 2048,
-            is_reversed: bool = False,
+        self,
+        path_file: str,
+        class_storage: Type,
+        tabla: str = "datos",
+        max_cache: int = 2048,
+        is_reversed: bool = False,
     ):
         self.class_storage = class_storage
         ListSQL.__init__(self, path_file, tabla, max_cache, is_reversed)
@@ -488,7 +491,7 @@ class IPC(object):
         if si_crear:
             Util.remove_file(path_file)
 
-        self._conexion = sqlite3.connect(path_file)
+        self._conexion = sqlite3.connect(path_file, check_same_thread=False)
         self.path_file = path_file
 
         if si_crear:
@@ -1050,7 +1053,7 @@ class Tickets:
 
             except sqlite3.OperationalError as exc:
                 if "locked" in str(exc).lower() and attempt < retries - 1:
-                    delay = base_delay * (2 ** attempt) + random.random() * 0.1
+                    delay = base_delay * (2**attempt) + random.random() * 0.1
                     time.sleep(delay)
                     continue
                 raise
@@ -1082,8 +1085,7 @@ class Tickets:
         if row:
             ref = row[0]
             conn.execute(
-                "INSERT INTO TICKETS (REF, PID, START_TIME) VALUES (?, ?, ?)",
-                (ref, current_pid, current_start_time)
+                "INSERT INTO TICKETS (REF, PID, START_TIME) VALUES (?, ?, ?)", (ref, current_pid, current_start_time)
             )
             return dic_data[ref]
 
@@ -1096,8 +1098,7 @@ class Tickets:
         for ref, pid, p_start_time in cursor:
             if not self._is_alive(pid, p_start_time):
                 conn.execute(
-                    "UPDATE TICKETS SET PID = ?, START_TIME = ? WHERE REF = ?",
-                    (current_pid, current_start_time, ref)
+                    "UPDATE TICKETS SET PID = ?, START_TIME = ? WHERE REF = ?", (current_pid, current_start_time, ref)
                 )
                 return dic_data[ref]
 

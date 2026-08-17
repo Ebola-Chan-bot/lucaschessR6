@@ -30,27 +30,33 @@ from Code.Voyager import Scanner
 MODO_POSICION, MODO_PARTIDA = range(2)
 
 
-def hamming_distance(string, other_string):
-    # Adaptation from https://github.com/bunchesofdonald/photohash, MIT license
-    """Computes the hamming distance between two strings."""
-    return sum(map(lambda x: 0 if x[0] == x[1] else 1, zip(string, other_string)))
+def hamming_distance(hash_str, other_hash_str):
+    """Bit-level Hamming distance between two hex hash strings."""
+    h1 = int(hash_str, 16)
+    h2 = int(other_hash_str, 16)
+    return (h1 ^ h2).bit_count()
 
 
-def average_hash(img, hash_size=8):
-    # Adaptation from https://github.com/bunchesofdonald/photohash, MIT license
-    """Computes the average hash of the given image."""
-    # Open the image, resize it and convert it to black & white.
-    image = img.resize(
-        (hash_size, hash_size),
-    ).convert("L")
+def average_hash(img, hash_size=16):
+    image = img.resize((hash_size, hash_size)).convert("L")
     pixels = list(image.getdata())
-
     avg = sum(pixels) // len(pixels)
+    bits = "".join("1" if p > avg else "0" for p in pixels)
+    return int(bits, 2).__format__(f"0{hash_size**2 // 4}x")
 
-    # Compute the hash based on each pixels value compared to the average.
-    bits = "".join(map(lambda pixel: "1" if pixel > avg else "0", pixels))
-    hashformat = f"0{hash_size ** 2 // 4}x"
-    return int(bits, 2).__format__(hashformat)
+
+def composite_hash(img, hash_size=16):
+    return average_hash(img, hash_size)
+
+
+def empty_variance(im):
+    image = im.convert("L")
+    pixels = list(image.getdata())
+    n = len(pixels)
+    if n == 0:
+        return 0
+    mean = sum(pixels) / n
+    return sum((p - mean) ** 2 for p in pixels) / n
 
 
 class WPosicion(QtWidgets.QWidget):
@@ -141,6 +147,8 @@ class WPosicion(QtWidgets.QWidget):
 
         self.chb_rem_ghost_deductions = Controles.CHB(self, _("Remove ghost deductions"), self.vars_scanner.rem_ghost)
 
+        self.chb_detect_borders = Controles.CHB(self, _("Detect borders"),  self.vars_scanner.detect_borders)
+
         self.cb_scanner_select, lb_scanner_select = QTMessages.combobox_lb(self, [], None, _("OPR"))
         self.cb_scanner_select.capture_changes(self.scanner_change)
         pb_scanner_more = Controles.PB(self, "", self.scanner_more).set_icono(Iconos.Mas())
@@ -152,6 +160,8 @@ class WPosicion(QtWidgets.QWidget):
         self.is_scan_init = False
         self.im_scanner = None
         self.pixmap = None
+        self.dic_pos_empty = {}
+        self.empty_variance_threshold = 80.0
 
         # LAYOUT -------------------------------------------------------------------------------------------
         hbox = Colocacion.H().control(self.rbWhite).espacio(15).control(self.rbBlack)
@@ -192,7 +202,9 @@ class WPosicion(QtWidgets.QWidget):
             .control(pb_scanner_remove)
         )
         ly = Colocacion.V().control(self.chb_scanner_flip).control(pb_scanner_deduce).otro(ly_l).otro(ly_t).otro(ly_tl)
-        ly.control(self.chb_rem_ghost_deductions).otro(ly_s)
+        ly.control(self.chb_rem_ghost_deductions)
+        ly.control(self.chb_detect_borders)
+        ly.otro(ly_s)
         ly.control(self.chb_scanner_ask)
         self.gb_scanner = Controles.GB(self, _("Scanner"), ly)
 
@@ -517,7 +529,6 @@ class WPosicion(QtWidgets.QWidget):
     def scanner(self):
         screen = ScreenUtils.get_screen(self)
         with ScreenUtils.EscondeWindow(self.wparent):
-
             if self.chb_scanner_ask.valor() and not QTMessages.pregunta(
                 None,
                 _("Bring the window to scan to front"),
@@ -541,15 +552,20 @@ class WPosicion(QtWidgets.QWidget):
                 self.scanner_init()
                 self.is_scan_init = True
 
+            self.vars_scanner.read()
+            self.vars_scanner.detect_borders = self.chb_detect_borders.valor()  # releemos la variable
+
             sc = Scanner.Scanner(self, self.configuration.paths.folder_scanners(), desktop, screen_geometry)
             if not sc.exec():
                 return
 
             self.vars_scanner.read()
             self.vars_scanner.tolerance = self.sb_scanner_tolerance.valor()  # releemos la variable
+            self.vars_scanner.detect_borders = self.chb_detect_borders.valor()  # releemos la variable
             self.vars_scanner.tolerance_learns = min(
                 self.sb_scanner_tolerance_learns.valor(), self.vars_scanner.tolerance
             )
+
 
             self.chb_scanner_flip.set_value(sc.side == BLACK)
 
@@ -575,8 +591,9 @@ class WPosicion(QtWidgets.QWidget):
         flipped = self.chb_scanner_flip.isChecked()
         w, h = im.size
         tam = w // 8
-        dic = {}
+        dic_hash = {}
         dic_color = {}
+        dic_empty = {}
         for f in range(8):
             for c in range(8):
                 if flipped:
@@ -591,10 +608,13 @@ class WPosicion(QtWidgets.QWidget):
                 y1 = y + tam - 4
                 im_t = im.crop((x, y, x1, y1))
                 pos = f"{col}{fil}"
-                dic[pos] = average_hash(im_t, hash_size=8)
+                dic_hash[pos] = composite_hash(im_t)
                 dic_color[pos] = (f + c) % 2 == 0
-        self.dicscan_pos_hash = dic
+                dic_empty[pos] = empty_variance(im_t) < 80.0
+        self.dicscan_pos_hash = dic_hash
         self.dic_pos_color = dic_color
+        self.dic_pos_empty = dic_empty
+        self.empty_variance_threshold = 80.0
         is_white_bottom = self.board.is_white_bottom
         if (is_white_bottom and flipped) or ((not is_white_bottom) and (not flipped)):
             self.board.rotate_board()
@@ -604,21 +624,29 @@ class WPosicion(QtWidgets.QWidget):
         self.scanner_deduce()
 
     def scanner_deduce_base(self, extended):
-        tolerance = self.sb_scanner_tolerance.valor()
+        tolerance = self.sb_scanner_tolerance.valor() * 8
+        margin = 2
+        dic_pos_empty = getattr(self, "dic_pos_empty", {})
         dic = {}
         for pos, hs in self.dicscan_pos_hash.items():
+            if dic_pos_empty.get(pos, False):
+                continue
             pz = None
             dt = INFINITE
+            dt_second = INFINITE
             reg = None
             cl = self.dic_pos_color[pos]
             for piece, color, hsp in self.li_scan_pch:
                 if cl == color:
                     dtp = hamming_distance(hs, hsp)
-                    if dtp <= dt:
-                        pz = piece
+                    if dtp < dt:
+                        dt_second = dt
                         dt = dtp
+                        pz = piece
                         reg = piece, color, hsp
-            if pz and dt <= tolerance:
+                    elif dtp < dt_second:
+                        dt_second = dtp
+            if pz and dt <= tolerance and (dt_second - dt) >= margin:
                 if extended:
                     dic[pos] = pz, reg, dt
                 else:
@@ -640,8 +668,8 @@ class WPosicion(QtWidgets.QWidget):
     def scanner_learn(self):
         cp = Position.Position()
         cp.read_fen(self.board.fen_active())
-        tolerance = self.sb_scanner_tolerance.valor()
-        tolerance_learn = min(self.sb_scanner_tolerance_learns.valor(), tolerance)
+        tolerance_raw = self.sb_scanner_tolerance.valor()
+        tolerance_learn = min(self.sb_scanner_tolerance_learns.valor(), tolerance_raw) * 8
 
         self.n_scan_last_added = len(self.li_scan_pch)
         dic_deduced_extended = self.scanner_deduce_base(True)
@@ -699,7 +727,7 @@ class WPosicion(QtWidgets.QWidget):
                         QTMessages.message_error(self, _("This scanner already exists."))
                         continue
                     try:
-                        with open(fich, "w") as f:
+                        with open(fich, "w", encoding="utf-8") as f:
                             f.write("")
                         self.scanner_reread(name)
                         return
@@ -759,7 +787,12 @@ class WPosicion(QtWidgets.QWidget):
         if Util.filesize(fich):
             with open(fich) as f:
                 for linea in f:
-                    self.li_scan_pch.append(ast.literal_eval(linea.strip()))
+                    linea = linea.strip()
+                    if linea:
+                        try:
+                            self.li_scan_pch.append(ast.literal_eval(linea))
+                        except (ValueError, SyntaxError):
+                            continue
         self.n_scan_last_save = len(self.li_scan_pch)
         self.n_scan_last_added = self.n_scan_last_save
 
@@ -788,6 +821,7 @@ class WPosicion(QtWidgets.QWidget):
         self.vars_scanner.tolerance_learns = self.sb_scanner_tolerance_learns.valor()
         self.vars_scanner.ask = self.chb_scanner_ask.valor()
         self.vars_scanner.rem_ghost = self.chb_rem_ghost_deductions.valor()
+        self.vars_scanner.detect_borders = self.chb_detect_borders.valor()
         self.vars_scanner.write()
 
     def keyPressEvent(self, event):

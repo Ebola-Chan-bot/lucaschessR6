@@ -4,7 +4,7 @@ import FasterCode
 
 import Code
 from Code import Util
-from Code.Base import Position
+from Code.Base import Position, Move
 from Code.Base.Constantes import FEN_INITIAL, RESULT_DRAW, RESULT_UNKNOWN, RESULT_WIN_BLACK, RESULT_WIN_WHITE
 from Code.Nags.Nags import NAG_1, NAG_2, NAG_3, NAG_4, NAG_5, NAG_6
 
@@ -113,7 +113,7 @@ class PGNtoGame:
             return
 
         label: str = kv[:pos]
-        value: str = kv[pos + 1:].strip()
+        value: str = kv[pos + 1 :].strip()
         label_upper: str = label.upper()
 
         if label_upper == "FEN":
@@ -146,8 +146,8 @@ class PGNtoGame:
         new_position: Position.Position = Position.Position()
         new_position.read_fen(FasterCode.get_fen())
 
-        move: Code.Base.Move.Move = Code.Base.Move.Move(
-            self,
+        move: Move.Move = Move.Move(
+            self.game,
             base_position,
             new_position,
             move_str[:2],

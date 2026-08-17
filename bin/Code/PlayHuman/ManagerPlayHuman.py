@@ -40,7 +40,6 @@ class ManagerPlayHuman(Manager.Manager):
     white = None
     black = None
     is_human_side_white = True  # necesario en adjourn
-    auto_rotate = False
 
     def start(self, dic_var):
         self.base_inicio(dic_var)
@@ -197,8 +196,7 @@ class ManagerPlayHuman(Manager.Manager):
             self.reiniciar(True)
 
         elif key == TB_CONFIG:
-            if self.state == ST_PLAYING:
-                self.configurar([], with_sounds=True)
+            self.configurar([], with_sounds=True)
 
         elif key == TB_UTILITIES:
             li_mas_opciones = [("books", _("Consult a book"), Iconos.Libros())]
@@ -394,9 +392,6 @@ class ManagerPlayHuman(Manager.Manager):
         if self.with_analysis_bar:
             self.main_window.base.analysis_bar.set_game(self.game)
 
-        if self.auto_rotate:
-            if is_white != self.board.is_white_bottom:
-                self.board.rotate_board()
         self.play_human(is_white)
 
     def play_human(self, is_white):

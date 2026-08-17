@@ -5,7 +5,6 @@ import os.path
 from PySide6 import QtCore, QtGui, QtWidgets
 
 import Code
-from Code.Z import PGNtoGame, Util
 from Code.Analysis import Analysis
 from Code.Base import Game
 from Code.Base.Constantes import (
@@ -43,9 +42,9 @@ from Code.QT import (
     ScreenUtils,
     SelectFiles,
 )
-from Code.ZQT import WindowSavePGN
 from Code.Translations import TrListas
-from Code.Voyager import Voyager
+from Code.Z import PGNtoGame, Util
+from Code.ZQT import WindowSavePGN
 
 
 class WLines(LCDialog.LCDialog):
@@ -216,8 +215,8 @@ class WLines(LCDialog.LCDialog):
         if resp:
             if isinstance(resp, str):
                 if QTMessages.pregunta(
-                    self,
-                    _("Are you sure you want to restore backup %s ?") % f"\n{resp}",
+                        self,
+                        _("Are you sure you want to restore backup %s ?") % f"\n{resp}",
                 ):
                     um = QTMessages.working(self)
                     self.dbop.recovering_history(resp)
@@ -338,7 +337,7 @@ class WLines(LCDialog.LCDialog):
 
             engine = self.configuration.engines.search(clave_motor).clone()
             engine.set_multipv_var(multi_pv)
-            xmanager = self.procesador.create_manager_analysis(engine, ms, depth, 0, engine.multiPV, priority=priority)
+            xmanager = self.procesador.create_manager_analyzer_var(engine, ms, depth, 0, engine.multiPV, priority=priority)
 
         mensaje = f"{_('Move')}  %d/{len(stfen)!s}"
         tmp_bp = QTMessages.ProgressBarSimple(self, _("Mass analysis"), "", len(stfen))
@@ -661,25 +660,27 @@ class WLines(LCDialog.LCDialog):
             game.li_moves = game.li_moves[: self.num_jg_actual + 1]
         return game
 
-    def voyager2(self, game):
-        ptxt = Voyager.voyager_game(self, game)
-        if ptxt:
-            game = Game.Game()
-            game.restore(ptxt)
-            self.add_partida(game)
-            self.show_lines()
-
     def importar(self):
         menu = QTDialogs.LCMenu(self)
 
         def haz_menu(frommenu, game_base, is_all=True):
             if is_all:
                 li_op = self.dbop.get_others(game_base)
+                otra = None
                 if li_op:
                     otra = frommenu.submenu(_("Other opening lines"), Iconos.OpeningLines())
                     for xfile, titulo in li_op:
                         otra.opcion(("ol", (xfile, game_base)), titulo, Iconos.PuntoVerde())
                     frommenu.separador()
+                if dic_other_folders := self.dbop.get_other_folders():
+                    if otra is None:
+                        otra = frommenu.submenu(_("Other opening lines"), Iconos.OpeningLines())
+                    rondo = QTDialogs.rondo_folders()
+                    for name_folder, paths_opk in dic_other_folders.items():
+                        other_folder = otra.submenu(name_folder, rondo.otro())
+                        for path_opk in paths_opk:
+                            other_folder.opcion(("ol", (str(path_opk), game_base)), path_opk.stem, Iconos.PuntoVerde())
+
             frommenu.opcion(("pgn", game_base), _("PGN with variations"), Iconos.Board())
             frommenu.separador()
             frommenu.opcion(("pastepgn", game_base), _("Paste PGN"), Iconos.Pegar16())
@@ -695,8 +696,6 @@ class WLines(LCDialog.LCDialog):
             )
 
             if is_all:
-                frommenu.separador()
-                frommenu.opcion(("voyager2", game_base), _("Voyager 2"), Iconos.Voyager())
                 frommenu.separador()
                 frommenu.opcion(("opening", game_base), _("Opening"), Iconos.Opening())
 
@@ -852,15 +851,18 @@ class WLines(LCDialog.LCDialog):
         key_var = "OPENINGLINES"
         self.configuration.write_variables(key_var, dic)
 
-    def read_params_import(self, path):
+    def read_params_import(self, title):
         dic_vars = self.read_config_vars()
 
-        form = FormLayout.FormLayout(self, os.path.basename(path), Iconos.Import8(), minimum_width=460)
+        form = FormLayout.FormLayout(self, title, Iconos.Import8(), minimum_width=460)
         form.separador()
 
         form.apart(_("Select the number of half-moves <br> for each game to be considered"))
 
         form.spinbox(_("Depth"), 3, 999, 50, dic_vars.get("IPGN_DEPTH", 999))
+        form.separador()
+
+        form.checkbox(_("Only in the opening phase"), dic_vars.get("IPGN_OPENING", False))
         form.separador()
 
         li_variations = (
@@ -884,21 +886,22 @@ class WLines(LCDialog.LCDialog):
         if resultado:
             accion, li_resp = resultado
             dic_vars["IPGN_DEPTH"] = depth = li_resp[0]
-            dic_vars["IPGN_VARIATIONSMODE"] = variations = li_resp[1]
-            dic_vars["IPGN_COMMENTS"] = comments = li_resp[2]
+            dic_vars["IPGN_OPENING"] = in_opening = li_resp[1]
+            dic_vars["IPGN_VARIATIONSMODE"] = variations = li_resp[2]
+            dic_vars["IPGN_COMMENTS"] = comments = li_resp[3]
             self.write_config_vars(dic_vars)
-            return depth, variations, comments
+            return depth, in_opening, variations, comments
         else:
-            return None, None, None
+            return None, None, None, None
 
     def import_database(self, game):
         path_db = QTDialogs.select_db(self, self.configuration, True, False)
         if not path_db:
             return
 
-        depth, variations, comments = self.read_params_import(path_db)
+        depth, in_opening, variations, comments = self.read_params_import(Util.get_name_without_ext(path_db))
         if depth is not None:
-            self.dbop.import_db(self, game, path_db, depth, variations, comments)
+            self.dbop.import_db(self, game, path_db, depth, in_opening, variations, comments)
             self.glines.refresh()
             self.glines.gotop()
 
@@ -912,17 +915,17 @@ class WLines(LCDialog.LCDialog):
         dic_vars = self.read_config_vars()
         carpeta = dic_vars.get("CARPETAPGN", self.configuration.paths.folder_userdata())
 
-        li_path_pgn = SelectFiles.leeFicheros(self, carpeta, "pgn", titulo=_("File to import"))
+        li_path_pgn = SelectFiles.read_files(self, carpeta, "pgn", titulo=_("File to import"))
         if not li_path_pgn:
             return
         dic_vars["CARPETAPGN"] = os.path.dirname(li_path_pgn[0])
         self.write_config_vars(dic_vars)
 
-        depth, variations, comments = self.read_params_import(li_path_pgn[0])
+        depth, in_opening, variations, comments = self.read_params_import(Util.get_name_without_ext(li_path_pgn[0]))
 
         if depth is not None:
             for path_pgn in li_path_pgn:
-                if not self.dbop.import_pgn(self, game, path_pgn, depth, variations, comments):
+                if not self.dbop.import_pgn(self, game, path_pgn, depth, in_opening, variations, comments):
                     break
             self.glines.refresh()
             self.glines.gotop()
@@ -939,13 +942,12 @@ class WLines(LCDialog.LCDialog):
                 return
             path_pgn = self.configuration.temporary_file("pgn")
             nlines = len(self.dbop)
-            dic_vars = self.read_config_vars()
-            depth = dic_vars.get("IPGN_DEPTH", 999)
-            variations = dic_vars.get("IPGN_VARIATIONSMODE", ALL)
-            comments = dic_vars.get("IPGN_COMMENTS", True)
+
             with open(path_pgn, "wt", encoding="utf-8") as q:
                 q.write(txt)
-            self.dbop.import_pgn(self, game, path_pgn, depth, variations, comments)
+            depth, in_opening, variations, comments = self.read_params_import(_("Paste PGN"))
+
+            self.dbop.import_pgn(self, game, path_pgn, depth, in_opening, variations, comments)
             self.glines.refresh()
             self.glines.gotop()
             nlines_imported = len(self.dbop) - nlines
@@ -957,7 +959,7 @@ class WLines(LCDialog.LCDialog):
         dic_var = self.read_config_vars()
         carpeta = dic_var.get("CARPETAPGN", self.configuration.paths.folder_userdata())
 
-        li_path_pgn = SelectFiles.leeFicheros(self, carpeta, "pgn", titulo=_("File to import"))
+        li_path_pgn = SelectFiles.read_files(self, carpeta, "pgn", titulo=_("File to import"))
         if not li_path_pgn:
             return
         fichero_pgn = li_path_pgn[0]
@@ -973,7 +975,7 @@ class WLines(LCDialog.LCDialog):
     def ta_import_other_comments(self):
         current_path = self.dbop.path_file
 
-        file_opk = SelectFiles.leeFichero(self, os.path.dirname(current_path), "opk", titulo=_("Opening lines"))
+        file_opk = SelectFiles.read_file(self, os.path.dirname(current_path), "opk", titulo=_("Opening lines"))
         if not file_opk or Util.same_path(current_path, file_opk):
             return
 
@@ -1151,7 +1153,7 @@ class WLines(LCDialog.LCDialog):
                 with QTMessages.WaitingMessage(self, mens, with_cancel=True) as wmsg:
 
                     def dispatch(rm, ms):
-                        wmsg.label(f'{mens}<br><small>{_("Depth")}: {rm.depth} {_("Time")}: {ms / 1000:.01f}')
+                        wmsg.label(f"{mens}<br><small>{_('Depth')}: {rm.depth} {_('Time')}: {ms / 1000:.01f}")
                         return not wmsg.is_canceled()
 
                     mrm, pos = xanalyzer.analyze_move(game, len(game) - 1, dispatch)
@@ -1309,7 +1311,7 @@ class WLines(LCDialog.LCDialog):
         elif resp == "lines":
             li_gen = [FormLayout.separador]
             config = FormLayout.Editbox(
-                f"<div align=\"right\">{_('Lines')}<br>{_('By example:')} -5,8-12,14,19-",
+                f'<div align="right">{_("Lines")}<br>{_("By example:")} -5,8-12,14,19-',
                 rx=r"[0-9,\-]*",
             )
             li_gen.append((config, ""))
@@ -1424,10 +1426,7 @@ class WLines(LCDialog.LCDialog):
             dic = self.dbop.dict_repeat_fen(si_white)
             mensaje = f"{_('Move')}  %d/{len(dic)!s}"
             if ms:
-                xmanager = self.procesador.create_manager_engine(
-                    self.configuration.engines.engine_tutor(), ms, 0, has_multipv=False
-                )
-                xmanager.set_multipv(10)
+                xmanager = self.procesador.create_manager_analyzer(ms, 0, 0, 10)
             else:
                 xmanager = None
 
@@ -1484,7 +1483,7 @@ class WLines(LCDialog.LCDialog):
                                 del dic_a1h8[a1h8]
 
                 if xmanager and len(dic_a1h8) > 1:
-                    mrm = xmanager.analiza(fen)
+                    mrm = xmanager.analyze_fen(fen)
                     li_analisis = []
                     for a1h8 in dic_a1h8:
                         rm, pos = mrm.search_rm(a1h8)
@@ -1496,7 +1495,7 @@ class WLines(LCDialog.LCDialog):
             tmp_bp.cerrar()
 
             if xmanager:
-                xmanager.finalize()
+                xmanager.close()
 
             if ok:
                 with QTMessages.working(self):
@@ -1522,8 +1521,8 @@ class WLines(LCDialog.LCDialog):
 
     def remove_pv(self, pgn, a1h8):
         if QTMessages.pregunta(
-            self,
-            _("Do you want to remove all lines beginning with %s?").replace("%s", pgn),
+                self,
+                _("Do you want to remove all lines beginning with %s?").replace("%s", pgn),
         ):
             um = QTMessages.working(self)
             self.dbop.remove_pv(pgn, a1h8)
@@ -1648,6 +1647,7 @@ class WLines(LCDialog.LCDialog):
 
     def closeEvent(self, event):
         self.final_processes()
+        event.accept()
 
     def player_has_moved_dispatcher(self, game):
         # Estamos en la misma linea ?
@@ -1678,12 +1678,14 @@ class WLines(LCDialog.LCDialog):
 
 def study(file):
     procesador = Code.procesador
-    with ScreenUtils.EscondeWindow(procesador.main_window):
-        dbop = OpeningLines.Opening(Util.opj(Code.configuration.paths.folder_openings(), file))
-        w = WLines(dbop)
-        w.exec()
+    dbop = OpeningLines.Opening(Util.opj(Code.configuration.paths.folder_openings(), file))
+    try:
+        with ScreenUtils.EscondeWindow(procesador.main_window):
+            w = WLines(dbop)
+            w.exec()
+            return w.resultado
+    finally:
         dbop.close()
-        return w.resultado
 
 
 class WImportPolyglot(LCDialog.LCDialog):

@@ -116,7 +116,7 @@ class ControlFindAllMoves:
 
     def remove_all(self) -> None:
         Util.remove_file(self.fichPuntos)
-        self.li_puntos = [[0, 0]] * len(self.db)
+        self.li_puntos = [[0, 0] for __ in range(len(self.db))]
 
     def average_time(self) -> float:
         num = 0
@@ -238,13 +238,12 @@ class ManagerFindAllMoves(Manager.Manager):
             self.disable_all()
 
         if number is None:
-
             pos = self.pgn.first_no_solved() + 1
             pos_with_error = self.pgn.pos_with_error() + 1
             if pos_with_error <= pos:
                 pos = pos_with_error
 
-            mens = _('Movements must be indicated in the following order: King, Queen, Rook, Bishop, Knight and Pawn.')
+            mens = _("Movements must be indicated in the following order: King, Queen, Rook, Bishop, Knight and Pawn.")
             number = WCompetitionWithTutor.edit_training_position(
                 self.main_window,
                 _("Find all moves"),
@@ -374,7 +373,7 @@ class ManagerFindAllMoves(Manager.Manager):
         mensaje, si_record = self.pgn.message_result(self.number, vtime, self.errors)
         self.pon_rotulotm()
 
-        if self.number == 59 and si_record and self.errors == 0:
+        if self.number == self.pgn.num_rows() - 1 and si_record and self.errors == 0:
             mens = f'<b><span style="color:green">{_("Congratulations, goal achieved")}</span></b>'
             QTMessages.message(self.main_window, mens)
         else:

@@ -123,7 +123,7 @@ class WLearnBase(LCDialog.LCDialog):
             label = TrListas.pgn_label(key)
             crea_col(key, label, key != "EVENT")
         self.grid = Grid.Grid(self, o_columns, complete_row_select=True, select_multiple=True)
-        self.grid.setMinimumWidth(self.grid.width_columns_displayables() + 20)
+        self.grid.fix_min_width()
 
         li_acciones = (
             (_("Close"), Iconos.MainMenu(), self.finalize),
@@ -262,7 +262,7 @@ class WLearn1(LCDialog.LCDialog):
         o_columns.nueva("HINTS", _("Hints"), 80, align_center=True)
         o_columns.nueva("TIME", _("Time"), 80, align_center=True)
         self.grid = Grid.Grid(self, o_columns, complete_row_select=True, select_multiple=True)
-        self.grid.setMinimumWidth(self.grid.width_columns_displayables() + 20)
+        self.grid.fix_min_width()
 
         # Tool bar
         li_acciones = (
@@ -358,7 +358,7 @@ class WLearn1(LCDialog.LCDialog):
         form.separador()
         form.apart(_("Second board"))
         label = _("Movement displayed")
-        label = f'{label}<br><small>{_("Disable")}=0'
+        label = f"{label}<br><small>{_('Disable')}=0"
         form.spinbox(label, 0, len(self.game), 40, dic.get("LEVEL", 1))
         form.separador()
         form.apart(_("Side you play with"))
@@ -665,8 +665,7 @@ class WLearnPuente(LCDialog.LCDialog):
             self.lbReloj.hide()
 
         self.pon_toolbar(self.INICIO)
-
-        self.siguiente()
+        QtCore.QTimer.singleShot(0, self.siguiente)
 
     def show_info(self):
         njg = self.replay_num_move if self.repWorking else self.current_num_move - 1
@@ -684,31 +683,31 @@ class WLearnPuente(LCDialog.LCDialog):
 
     def siguiente(self):
         num_moves = len(self.game)
-        self.current_num_move += 1
-        self.show_info()
-        self.lbIni.set_text("%d/%d" % (self.current_num_move, num_moves))
-        if self.current_num_move == num_moves:
-            self.end_game()
-            return
+        while True:
+            self.current_num_move += 1
+            self.show_info()
+            self.lbIni.set_text("%d/%d" % (self.current_num_move, num_moves))
+            if self.current_num_move == num_moves:
+                self.end_game()
+                return
 
-        move = self.game.move(self.current_num_move)
+            move = self.game.move(self.current_num_move)
 
-        self.boardIni.set_position(move.position_before)
+            self.boardIni.set_position(move.position_before)
 
-        move_prev = move.previous_move
-        if move_prev:
-            self.boardIni.put_arrow_sc(move_prev.from_sq, move_prev.to_sq)
+            move_prev = move.previous_move
+            if move_prev:
+                self.boardIni.put_arrow_sc(move_prev.from_sq, move_prev.to_sq)
 
-        if self.nivel > 0:
-            self.boardFin.set_position(move.next_position)
-            self.lbFin.set_text("%d/%d" % (min(move.pos_move + self.nivel, num_moves), num_moves))
+            if self.nivel > 0:
+                self.boardFin.set_position(move.next_position)
+                self.lbFin.set_text("%d/%d" % (min(move.pos_move + self.nivel, num_moves), num_moves))
 
-        color = move.position_before.is_white
+            color = move.position_before.is_white
 
-        if (color and self.white) or (not color and self.black):
-            self.boardIni.activate_side(color)
-        else:
-            self.siguiente()
+            if (color and self.white) or (not color and self.black):
+                self.boardIni.activate_side(color)
+                break
 
     def player_has_moved_dispatcher(self, from_sq, to_sq, promotion=""):
         move = self.game.move(self.current_num_move)
@@ -719,7 +718,7 @@ class WLearnPuente(LCDialog.LCDialog):
 
         if from_sq == move.from_sq and to_sq == move.to_sq and promotion.lower() == move.promotion.lower():
             self.boardIni.put_arrow_sc(from_sq, to_sq)
-            self.siguiente()
+            QtCore.QTimer.singleShot(0, self.siguiente)
             return False  # Que actualice solo siguiente
         else:
             if to_sq != from_sq:
@@ -763,7 +762,7 @@ class WLearnPuente(LCDialog.LCDialog):
 
         texto = (
             f'<hr><center><span style="color: red; font-weight: bold; font-size: 18pt;">{_("Ended")}</center>'
-            f'<hr>{self.lbInfo.text()}'
+            f"<hr>{self.lbInfo.text()}"
         )
         self.lbInfo.set_text(texto)
 

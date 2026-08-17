@@ -38,19 +38,19 @@ class Move:
     """
 
     def __init__(
-            self,
-            game,
-            position_before=None,
-            position=None,
-            from_sq=None,
-            to_sq=None,
-            promotion="",
+        self,
+        game,
+        position_before=None,
+        position=None,
+        from_sq=None,
+        to_sq=None,
+        promotion="",
     ):
         self.game = game
         self.analysis = None
         self.position_before = position_before
         self.position = position
-        self.in_the_opening = False
+        self._in_the_opening = None
         self.from_sq = from_sq or ""
         self.to_sq = to_sq or ""
         self.promotion = promotion.lower() if promotion else ""
@@ -74,14 +74,18 @@ class Move:
 
         self._phase = PHASE_NODEFINED
 
+    @property
+    def in_the_opening(self) -> bool:
+        if self._in_the_opening is None:
+            fenm2 = self.position.fenm2()
+            self._in_the_opening = OpeningsStd.ap.is_book_fenm2(fenm2)
+        return self._in_the_opening
+
     def is_book_move(self):
         """
         Return True if this move is considered a book move.
         """
-        if self.in_the_opening or self.is_book:
-            return True
-        fenm2 = self.position.fenm2()
-        return OpeningsStd.ap.is_book_fenm2(fenm2)
+        return self.is_book or self.in_the_opening
 
     def set_time_ms(self, ms):
         """
@@ -103,12 +107,12 @@ class Move:
         (no variations, comments, NAGs, analysis, themes or time).
         """
         return not (
-                self.variations
-                or self.comment
-                or len(self.li_nags) > 0
-                or self.analysis
-                or len(self.li_themes) > 0
-                or self.time_ms
+            self.variations
+            or self.comment
+            or len(self.li_nags) > 0
+            or self.analysis
+            or len(self.li_themes) > 0
+            or self.time_ms
         )
 
     def get_themes(self) -> list:
@@ -280,10 +284,23 @@ class Move:
             return self.pgn_translated()
         parts = []
         for c in self.base_pgn():
-            if c in "NBRQK":
+            if c in "NBRQKP":
                 c = dicHTMLFigs[c if is_white else c.lower()]
             parts.append(c)
         return "".join(parts)
+
+    def pgn_menu(self, with_figurines):
+        if not with_figurines:
+            return self.pgn_translated()
+        base = self.base_pgn().replace("b", chr(0x185))
+        if not self.is_white():
+            parts = []
+            for c in base:
+                if c in "NBRQKP":
+                    c = c.lower()
+                parts.append(c)
+            base = "".join(parts)
+        return base
 
     def pgn_html(self, with_figurines):
         return self.pgn_html_base(with_figurines) + self.resto()
@@ -450,7 +467,7 @@ class Move:
         return Position.distancia(self.from_sq, self.to_sq)
 
     def save(self, with_variations: bool = True):
-        dic = {"move": self.movimiento(), "in_the_opening": self.in_the_opening}
+        dic = {"move": self.movimiento()}
         if len(self.variations) and with_variations:
             dic["variations"] = self.variations.save()
         if self.comment:
@@ -478,8 +495,6 @@ class Move:
         cp = self.position_before.copia()
         cp.play(self.from_sq, self.to_sq, self.promotion.lower())
         self.position = cp
-
-        self.in_the_opening = dic["in_the_opening"]
 
         if "variations" in dic:
             self.variations.restore(dic["variations"])
@@ -556,18 +571,27 @@ class Move:
 
     @property
     def phase(self):
+        if self._phase == PHASE_NODEFINED:
+            self._phase = self.position_before.phase()
         return self._phase
 
     def __eq__(self, other: "Move") -> bool:
         return self.position_before == other.position_before and self.movimiento() == other.movimiento()
 
+    def get_num_in_game(self) -> int:
+        for pos, mv in enumerate(self.game.li_moves):
+            if mv == self:
+                return pos
+        return -1
+
 
 def get_game_move(game, position_before, from_sq, to_sq, promotion):
     position = position_before.copia()
+    promotion = promotion.lower() if promotion else ""
 
     ok, mens_error = position.play(from_sq, to_sq, promotion)
     if ok:
-        move = Move(game, position_before, position, from_sq, to_sq, promotion.lower())
+        move = Move(game, position_before, position, from_sq, to_sq, promotion)
 
         return True, None, move
     else:
@@ -690,9 +714,9 @@ class Variations:
             name = mrm.name
             if mrm.max_time:
                 t = f"{float(mrm.max_time) / 1000.0:.2f}".rstrip("0").rstrip(".")
-                info_suffix = f'{_("Second(s)")} {t}'
+                info_suffix = f"{_('Second(s)')} {t}"
             elif mrm.max_depth:
-                info_suffix = f'{_("Depth")} {mrm.max_depth}'
+                info_suffix = f"{_('Depth')} {mrm.max_depth}"
             else:
                 info_suffix = ""
             info_suffix = f" {name} {info_suffix}"

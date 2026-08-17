@@ -16,6 +16,7 @@ from Code.Base.Constantes import (
     KIB_POLYGLOT,
     KIB_STOCKFISH,
     KIB_THREATS,
+    MULTIPV_BYDEFAULT,
 )
 from Code.Books import Books
 from Code.Engines import Engines, Priorities
@@ -184,6 +185,9 @@ class Kibitzers:
         kib.key = name
         kib.name = name
         kib.tipo = tipo
+        if tipo == KIB_CANDIDATES:
+            kib.set_multipv_var(MULTIPV_BYDEFAULT)
+            kib.set_uci_option("MultiPV", kib.multiPV)
         kib.prioridad = prioridad
         kib.pointofview = pointofview
         kib.max_time = fixed_time
@@ -254,20 +258,6 @@ class Kibitzers:
     def remove(self, num):
         del self.lista[num]
         self.save()
-
-    def up(self, num):
-        if num > 0:
-            self.lista[num], self.lista[num - 1] = self.lista[num - 1], self.lista[num]
-            self.save()
-            return num - 1
-        return None
-
-    def down(self, num):
-        if num < (len(self.lista) - 1):
-            self.lista[num], self.lista[num + 1] = self.lista[num + 1], self.lista[num]
-            self.save()
-            return num + 1
-        return None
 
     def clone(self, num):
         kib = self.lista[num].clone_list(self.lista)

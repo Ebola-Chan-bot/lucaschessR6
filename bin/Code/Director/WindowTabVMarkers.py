@@ -79,6 +79,7 @@ class WTVMarker(QtWidgets.QDialog):
             (f"{_('Top')}-{_('Right')}", 1),
             (f"{_('Bottom')}-{_('Left')}", 2),
             (f"{_('Bottom')}-{_('Right')}", 3),
+            (_("Centered"), 4),
         )
         config = FormLayout.Combobox(_("Position in the square"), li)
         li_gen.append((config, reg_marker.poscelda))
@@ -246,7 +247,7 @@ class WTVMarkers(LCDialog.LCDialog):
             key = "MARKERS"
             dic = Code.configuration.read_variables(key)
             folder = dic.get("PATH_SEEK", Code.configuration.paths.folder_userdata())
-            file = SelectFiles.leeFichero(self, folder, "svg", titulo=_("Image"))
+            file = SelectFiles.read_file(self, folder, "svg", titulo=_("Image"))
             if not file:
                 return
             dic["PATH_SEEK"] = os.path.dirname(file)
@@ -310,7 +311,7 @@ class WTVMarkers(LCDialog.LCDialog):
             reg_marker.name = name
             reg_marker.id = Util.huella()
             reg_marker.ordenVista = self.liPMarkers[-1].ordenVista + 1
-            self.db_markers[reg_marker.id] = reg_marker
+            self.db_markers[reg_marker.id] = reg_marker.save_dic()
             self.liPMarkers.append(reg_marker)
             self.grid.refresh()
             self.grid.setFocus()

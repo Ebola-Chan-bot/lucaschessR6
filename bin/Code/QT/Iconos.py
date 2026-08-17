@@ -2658,12 +2658,6 @@ def pmBridge():
 def Bridge():
     return iget("Bridge")
 
-def pmMaia():
-    return iget("pmMaia")
-
-def Maia():
-    return iget("Maia")
-
 def pmBinBook():
     return iget("pmBinBook")
 
@@ -2993,6 +2987,12 @@ def pmHOS():
 
 def HOS():
     return iget("HOS")
+
+def pmManya():
+    return iget("pmManya")
+
+def Manya():
+    return iget("Manya")
 
 def pmRodent():
     return iget("pmRodent")
@@ -3413,3 +3413,39 @@ def pmEval():
 
 def Eval():
     return iget("Eval")
+
+def pmSpaceBoth():
+    return iget("pmSpaceBoth")
+
+def SpaceBoth():
+    return iget("SpaceBoth")
+
+def pmSpaceWhite():
+    return iget("pmSpaceWhite")
+
+def SpaceWhite():
+    return iget("SpaceWhite")
+
+def pmSpaceBlack():
+    return iget("pmSpaceBlack")
+
+def SpaceBlack():
+    return iget("SpaceBlack")
+
+def pmMaiaLadder():
+    return iget("pmMaiaLadder")
+
+def MaiaLadder():
+    return iget("MaiaLadder")
+
+def pmParrilla():
+    return iget("pmParrilla")
+
+def Parrilla():
+    return iget("Parrilla")
+
+def pmNewFolder():
+    return iget("pmNewFolder")
+
+def NewFolder():
+    return iget("NewFolder")

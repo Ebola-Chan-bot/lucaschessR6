@@ -7,8 +7,6 @@ from Code.Base.Constantes import (
     TACTICS_BASIC,
     TACTICS_PERSONAL,
 )
-from Code.CompetitionWithTutor import CompetitionWithTutor
-from Code.Memory import Memory
 from Code.Menus import BaseMenu, TrainMenuRun
 from Code.QT import Iconos, QTDialogs
 from Code.Tactics import Tactics
@@ -92,20 +90,21 @@ class TrainMenu(BaseMenu.RootMenu):
 
         submenu_basic.new("anotar", _("Writing down moves of a game"), Iconos.Write())
 
-    def memory(self, submenu_basic):
-        submenu_memory = submenu_basic.new_submenu(_("Check your memory on a chessboard"), Iconos.Memoria())
-        mem = Memory.Memoria(self.procesador)
-        categorias = CompetitionWithTutor.Categorias()
-        for x in range(6):
-            cat = categorias.number(x)
-            txt = cat.name()
-
-            nm = mem.nivel(x)
-            if nm >= 0:
-                txt += f" {TrListas.level(nm + 1)}"
-
-            submenu_memory.new(f"memory_{x}", txt, cat.icono(), enabled=mem.is_active(x), sep=False)
-        submenu_memory.new("memory_results", _("Results"), Iconos.Estadisticas2())
+    @staticmethod
+    def memory(submenu_basic):
+        submenu_basic.new("memory", _("Check your memory on a chessboard"), Iconos.Memoria())
+        # mem = Memory.Memoria(self.procesador)
+        # categorias = CompetitionWithTutor.Categorias()
+        # for x in range(6):
+        #     cat = categorias.number(x)
+        #     txt = cat.name()
+        #
+        #     nm = mem.nivel(x)
+        #     if nm >= 0:
+        #         txt += f" {TrListas.level(nm + 1)}"
+        #
+        #     submenu_memory.new(f"memory_{x}", txt, cat.icono(), enabled=mem.is_active(x), sep=False)
+        # submenu_memory.new("memory_results", _("Results"), Iconos.Estadisticas2())
 
     @staticmethod
     def find_all_moves(submenu_basic):
@@ -179,17 +178,17 @@ class TrainMenu(BaseMenu.RootMenu):
         submenu_turn_on_the_ligths = submenu_tactics.new_submenu(_("Turn on the lights"), Iconos.TOL())
 
         submenu_memory_mode = submenu_turn_on_the_ligths.new_submenu(_("Memory mode"), Iconos.TOL())
-        submenu_memory_mode.new("tol_uned_easy", f'{_("UNED chess school")} ({_("Initial")})', Iconos.Uned())
+        submenu_memory_mode.new("tol_uned_easy", f"{_('UNED chess school')} ({_('Initial')})", Iconos.Uned())
         submenu_memory_mode.new(
             "tol_uned",
-            f'{_("UNED chess school")} ({_("Complete")})',
+            f"{_('UNED chess school')} ({_('Complete')})",
             Iconos.Uned(),
             sep=False,
         )
-        submenu_memory_mode.new("tol_uwe_easy", f'{_("Uwe Auerswald")} ({_("Initial")})', Iconos.Uwe())
+        submenu_memory_mode.new("tol_uwe_easy", f"{_('Uwe Auerswald')} ({_('Initial')})", Iconos.Uwe())
         submenu_memory_mode.new(
             "tol_uwe",
-            f'{_("Uwe Auerswald")} ({_("Complete")})',
+            f"{_('Uwe Auerswald')} ({_('Complete')})",
             Iconos.Uned(),
             sep=False,
         )
@@ -197,19 +196,19 @@ class TrainMenu(BaseMenu.RootMenu):
         submenu_memory_mode = submenu_turn_on_the_ligths.new_submenu(_("Calculation mode"), Iconos.TOL())
         submenu_memory_mode.new(
             "tol_uned_easy_calc",
-            f'{_("UNED chess school")} ({_("Initial")})',
+            f"{_('UNED chess school')} ({_('Initial')})",
             Iconos.Uned(),
         )
         submenu_memory_mode.new(
             "tol_uned_calc",
-            f'{_("UNED chess school")} ({_("Complete")})',
+            f"{_('UNED chess school')} ({_('Complete')})",
             Iconos.Uned(),
             sep=False,
         )
-        submenu_memory_mode.new("tol_uwe_easy_calc", f'{_("Uwe Auerswald")} ({_("Initial")})', Iconos.Uwe())
+        submenu_memory_mode.new("tol_uwe_easy_calc", f"{_('Uwe Auerswald')} ({_('Initial')})", Iconos.Uwe())
         submenu_memory_mode.new(
             "tol_uwe_calc",
-            f'{_("Uwe Auerswald")} ({_("Complete")})',
+            f"{_('Uwe Auerswald')} ({_('Complete')})",
             Iconos.Uned(),
             sep=False,
         )
@@ -229,7 +228,7 @@ class TrainMenu(BaseMenu.RootMenu):
 
         def gen_folder(folder: str, submenu, icono):
             base_path = Path(folder)
-            archivos_fns = list(base_path.rglob('*.fns'))
+            archivos_fns = list(base_path.rglob("*.fns"))
             archivos_fns.sort()
             rutas_relativas = []
             for archivo_path in archivos_fns:

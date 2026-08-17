@@ -137,7 +137,7 @@ class DBgames:
                 lifields.append(f'"{key}"')
         sql_create = ",".join(licreate)
         sql_fields = ",".join(lifields)
-        sql_select = ",".join(['Games_old."%s"' % f.replace('"', '') for f in lifields])
+        sql_select = ",".join(['Games_old."%s"' % f.replace('"', "") for f in lifields])
 
         for sql in (
                 "PRAGMA foreign_keys=off;",
@@ -502,7 +502,7 @@ class DBgames:
 
     def read_complete_recno(self, recno):
         rowid = self.li_row_ids[recno]
-        cursor = self.conexion.execute("SELECT %s FROM Games WHERE rowid =%d" % (self.select, rowid))
+        cursor = self.conexion.execute(f"SELECT {self.select} FROM Games WHERE rowid = ?", (rowid,))
         return cursor.fetchone()
 
     def count_data(self, filtro):
@@ -768,9 +768,10 @@ class DBgames:
         li_tags = [["Date", f"{hoy.year:d}.{hoy.month:02d}.{hoy.day:02d}"]]
         return Game.Game(li_tags=li_tags)
 
-    def save_game_recno(self, recno, game):
+    def save_game_recno(self, recno, game, with_commit=True):
         game.refresh_tacticthemes(TACTICTHEMES.upper() in self.st_fields)
-        return self.insert(game) if recno is None else self.modify(recno, game)
+        return self.insert(game, with_commit=with_commit) if recno is None else self.modify(recno, game,
+                                                                                            with_commit=with_commit)
 
     def fill(self, li_field_value):
         lset = ",".join(f"{field}=?" for field, value in li_field_value)
@@ -780,12 +781,17 @@ class DBgames:
         self.conexion.execute(sql, [value for field, value in li_field_value])
         self.conexion.commit()
 
-    def fill_pgn(self, field):
+    def fill_pgn(self, field, um):
         sql = "SELECT ROWID, XPV FROM Games"
         if self.filter:
             sql += f" WHERE {self.filter}"
         cursor = self.conexion.execute(sql)
-        for rowid, xpv in cursor.fetchall():
+        li = cursor.fetchall()
+        um.set_total_progressbar(len(li))
+        for pos, (rowid, xpv) in enumerate(li, 1):
+            if um.is_canceled():
+                break
+            um.set_value_progressbar(pos)
             if xpv.startswith("|"):
                 nada, fen, xpv = xpv.split("|")
                 pv = FasterCode.xpv_pv(xpv)
@@ -795,21 +801,51 @@ class DBgames:
             pgn = pgn.replace("\n", " ")
             sql = f"UPDATE Games SET {field}=? WHERE ROWID=?"
             self.conexion.execute(sql, [pgn, rowid])
+        um.set_hide_progressbar()
         self.conexion.commit()
 
-    def fill_opening(self, field):
+    def fill_opening(self, field, um):
         sql = "SELECT ROWID, XPV FROM Games"
         if self.filter:
             sql += f" WHERE {self.filter}"
         cursor = self.conexion.execute(sql)
         op_std = OpeningsStd.ap
-        for rowid, xpv in cursor.fetchall():
+        li = cursor.fetchall()
+        um.set_total_progressbar(len(li))
+        for pos, (rowid, xpv) in enumerate(li, 1):
+            if um.is_canceled():
+                break
+            um.set_value_progressbar(pos)
+
             if xpv.startswith("|"):
                 continue
             name = op_std.xpv(xpv)
             if name:
                 sql = f"UPDATE Games SET {field}=? WHERE ROWID=?"
                 self.conexion.execute(sql, [name, rowid])
+        um.set_hide_progressbar()
+        self.conexion.commit()
+
+    def fill_eco_opening(self, field, um):
+        sql = "SELECT ROWID, XPV FROM Games"
+        if self.filter:
+            sql += f" WHERE {self.filter}"
+        cursor = self.conexion.execute(sql)
+        op_std = OpeningsStd.ap
+        li = cursor.fetchall()
+        um.set_total_progressbar(len(li))
+        for pos, (rowid, xpv) in enumerate(li, 1):
+            if um.is_canceled():
+                break
+            um.set_value_progressbar(pos)
+            if xpv.startswith("|"):
+                continue
+            eco = op_std.xpv_eco(xpv)
+            if not eco:
+                eco = "A00"
+            sql = f"UPDATE Games SET {field}=? WHERE ROWID=?"
+            self.conexion.execute(sql, [eco, rowid])
+        um.set_hide_progressbar()
         self.conexion.commit()
 
     def pack(self):
@@ -915,7 +951,7 @@ class DBgames:
                         dl_tmp.refresh_gui()
                         continue
 
-                    d_cab = {decode(k).replace(" ", ""): decode(v) for k, v in bdCab.items()}
+                    d_cab = {decode(k).replace(" ", ""): decode(v).strip() for k, v in bdCab.items()}
                     d_cablwr = {decode(k).replace(" ", ""): decode(v) for k, v in bdCablwr.items()}
                     dcabs.update(d_cablwr)
 
@@ -968,7 +1004,6 @@ class DBgames:
 
                     for k in d_cab:
                         if k.upper() not in self.st_fields:
-
                             # Grabamos lo que hay
                             if li_regs:
                                 n_regs = 0
@@ -1201,7 +1236,7 @@ class DBgames:
         if with_commit:
             self.conexion.commit()
 
-    def modify(self, recno, game_modificada: Game.Game):
+    def modify(self, recno, game_modificada: Game.Game, with_commit=True):
         resp = Util.Record()
         resp.ok = True
         resp.changed = False
@@ -1215,11 +1250,10 @@ class DBgames:
             resp.mens_error = mens_error
             return resp
 
-        game_antiguo = self.read_game_recno(recno)
-        #
-        # # La game antigua y la nueva son iguales ? no se hace nada.
-        # if game_antigua == game_modificada:  # game.__eq__
-        #     return resp
+        # Optimization: Only read old game if stats are enabled
+        game_antiguo = None
+        if self.with_db_stat:
+            game_antiguo = self.read_game_recno(recno)
 
         # Test si hay nuevos tags
         for tag, valor in game_modificada.li_tags:
@@ -1247,14 +1281,15 @@ class DBgames:
         sql = f"UPDATE Games SET {set_clause} WHERE ROWID = ?"
         try:
             self.conexion.execute(sql, li_data + [rowid])
-            self.conexion.commit()
+            if with_commit:
+                self.conexion.commit()
         except sqlite3.Error as e:
             resp.ok = False
             resp.mens_error = str(e)
             return resp
 
         # Summary
-        if self.with_db_stat:
+        if self.with_db_stat and game_antiguo:
             if game_antiguo.get_tag("FEN") is None:
                 pv = game_antiguo.pv()
                 if pv:
@@ -1264,6 +1299,8 @@ class DBgames:
                 if pv:
                     self.db_stat.append(pv, game_modificada.resultado(), r=+1)
             resp.summary_changed = True
+            if with_commit:
+                self.db_stat.commit()
 
         if rowid in self.cache:
             del self.cache[rowid]
@@ -1399,13 +1436,14 @@ class DBgames:
 
         if li_rowids:
             for rowid in li_rowids:
-                li.append(f'ROWID = {rowid}')
+                li.append(f"ROWID = {rowid}")
 
         condicion = f"({' OR '.join(li)})"
         self.filter = condicion
 
         self.li_row_ids = []
         self.rowidReader.setup(self.li_row_ids, condicion, self.order)
+        self.rowidReader.start()
 
 
 def get_random_game():

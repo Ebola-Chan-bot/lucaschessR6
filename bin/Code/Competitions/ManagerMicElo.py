@@ -101,7 +101,7 @@ class ManagerMicElo(Manager.Manager):
             result = -1
         return Util.fide_elo(elo_jugador, elo_rival, result)
 
-    def list_engines(self, elo):
+    def list_engines_elo(self, elo):
         self.li_t = (
             (0, 50, 3),
             (20, 53, 5),
@@ -209,7 +209,7 @@ class ManagerMicElo(Manager.Manager):
         self.black_elo = eloplayer if not is_white else eloengine
 
         self.manager_rival = self.procesador.create_manager_engine(
-            self.engine_rival, 0, 0, 0, has_multipv=self.engine_rival.multiPV > 0
+            self.engine_rival, 0, 0, 0, has_multipv=self.engine_rival.multiPV > 1
         )
         self.manager_rival.check_engine()
 

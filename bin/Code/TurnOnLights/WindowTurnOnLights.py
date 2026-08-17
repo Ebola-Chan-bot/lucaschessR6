@@ -21,6 +21,9 @@ from Code.TurnOnLights import TurnOnLights
 
 
 class WTurnOnLights(LCDialog.LCDialog):
+    num_theme: int
+    num_block: int
+
     def __init__(self, procesador, name, title, icono, folder, li_tam_blocks, one_line):
         self.one_line = one_line
         if one_line:
@@ -98,24 +101,25 @@ class WTurnOnLights(LCDialog.LCDialog):
         self.save_video()
         self.reject()
 
-    def grid_num_datos(self, grid):
+    def grid_num_datos(self, _grid):
         return self.tol.num_themes
 
-    def grid_dato(self, grid, row, obj_column):
+    def grid_dato(self, _grid, row, obj_column):
         col = obj_column.key
         if col == "THEME":
             return f"  {self.tol.nom_theme(row)}"
         elif col.startswith("BLOCK"):
             block = int(col[5:])
             return self.tol.val_block(row, block)
+        return None
 
-    def grid_color_fondo(self, grid, row, obj_column):
+    def grid_color_fondo(self, _grid, _row, obj_column):
         col = obj_column.key
         if col == "THEME":
             return self.colorTheme
         return None
 
-    def grid_doble_click(self, grid, row, obj_column):
+    def grid_doble_click(self, _grid, row, obj_column):
         col = obj_column.key
         if col.startswith("BLOCK"):
             block = int(col[5:])
@@ -124,7 +128,7 @@ class WTurnOnLights(LCDialog.LCDialog):
             self.save_video()
             self.accept()
 
-    def grid_right_button(self, grid, row, obj_column, modificadores):
+    def grid_right_button(self, _grid, row, obj_column, _modificadores):
         col = obj_column.key
         num_theme = row
         if col.startswith("BLOCK"):
@@ -300,7 +304,7 @@ class WTurnOnLights(LCDialog.LCDialog):
 
     def colors(self):
         menu = QTDialogs.LCMenu(self)
-        num, ultimo = TurnOnLights.numColorMinimum(self.tol)
+        num, ultimo = TurnOnLights.num_color_minimum(self.tol)
         snum = str(num)
         think_mode = self.tol.is_calculation_mode()
         for txt, key, secs, secsThink in TurnOnLights.QUALIFICATIONS:

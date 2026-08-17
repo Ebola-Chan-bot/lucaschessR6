@@ -86,6 +86,7 @@ cdef extern from "irina.h":
     void init_board()
     void fen_board(char *fen)
     char *board_fen(char *fen)
+    char *board_fenM2(char *fen)
     int movegen()
     int pgn2pv(char *pgn, char *pv)
     int make_nummove(int num)
@@ -289,7 +290,7 @@ class PGNreader:
     ) -> None:
 
         cdef Py_ssize_t n = len(line)
-        if n < 2:
+        if n < 4:
             return
         content = line[1:n-1].strip()
 
@@ -595,6 +596,11 @@ def get_fen():
     x = fen.decode("utf-8")
     return x
 
+def get_fenm2():
+    cdef char fen[256]
+    board_fenM2(fen)
+    x = fen.decode("utf-8")
+    return x
 
 def get_moves():
     cdef char pv[32]
@@ -705,94 +711,75 @@ def ischeck():
     return incheck()
 
 
-cdef class InfoMove:
-    cdef:
-        bytes _pv
-        bytes _san
-        bytes _from
-        bytes _to
-        bytes _promotion
-        bytes _piece
-        bytes _capt_piece
-
-        bint _castle_K
-        bint _castle_Q
-        bint _ep
-        bint _check
-        bint _mate
-        bint _capture
-
-    def __cinit__(self, int num):
-        cdef char pv[64]
-        cdef char info[64]
-        cdef char san[64]
+class InfoMove(object):
+    def __init__(self, num):
+        cdef char pv[32]
+        cdef char info[32]
+        cdef char san[32]
 
         get_move(num, pv)
         get_move_ex(num, info)
         to_san(num, san)
 
-        # Convert once to bytes (safe copy)
+        # info = P a1 h8 q [K|Q|]
+
+        self._castle_K = info[6] == b"K"
+        self._castle_Q = info[6] == b"Q"
+        self._ep = info[7] == b"E"
+        self._capt_piece = chr(info[8])
         self._pv = pv
         self._san = san
 
-        # info layout: P a1 h8 q [K|Q|] E
+
         self._piece = info[0:1]
         self._from = info[1:3]
         self._to = info[3:5]
         self._promotion = info[5:6].strip()
+        self._check = b"+" in san
+        self._mate = b"#" in san
+        self._capture = b"x" in san
 
-        self._castle_K = info[6] == ord('K')
-        self._castle_Q = info[6] == ord('Q')
-        self._ep = info[7] == ord('E')
-        self._capt_piece = info[8]
-
-        # SAN flags (bytes search once)
-        self._check = b'+' in self._san
-        self._mate = b'#' in self._san
-        self._capture = b'x' in self._san
-
-    cpdef str xfrom(self):
+    def xfrom(self):
         return self._from.decode("utf-8")
 
-    cpdef str xto(self):
+    def xto(self):
         return self._to.decode("utf-8")
 
-    cpdef str promotion(self):
-        if self._promotion:
-            return self._promotion.lower().decode("utf-8")
-        return ""
+    def promotion(self):
+        return self._promotion.lower().decode("utf-8")
 
-    cpdef str move(self):
+    def move(self):
         return (self._from + self._to + self._promotion.lower()).decode("utf-8")
 
-    cpdef bytes bmove(self):
+    def bmove(self):
         return self._from + self._to + self._promotion.lower()
 
-    cpdef bint check(self):
+    def check(self):
         return self._check
 
-    cpdef bint mate(self):
+    def mate(self):
         return self._mate
 
-    cpdef bint capture(self):
+    def capture(self):
         return self._capture
 
-    cpdef str piece(self):
+    def piece(self):
         return self._piece.decode("utf-8")
 
-    cpdef str piece_captured(self):
-        return self._capt_piece.decode("utf-8")
+    def piece_captured(self):
+        return self._capt_piece
 
-    cpdef bint iscastle_k(self):
+
+    def iscastle_k(self):
         return self._castle_K
 
-    cpdef bint iscastle_q(self):
+    def iscastle_q(self):
         return self._castle_Q
 
-    cpdef bint is_enpassant(self):
+    def is_enpassant(self):
         return self._ep
 
-    cpdef str san(self):
+    def san(self):
         return self._san.decode("utf-8")
 
 

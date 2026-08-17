@@ -1,3 +1,4 @@
+import os
 import sys
 
 from PySide6 import QtCore, QtWidgets
@@ -7,37 +8,47 @@ from Code.Base.Constantes import ExitProgram
 from Code.Config import Configuration, Usuarios
 from Code.Main import InitApp
 from Code.QT import Colocacion, Controles, GarbageCollector, Iconos
-from Code.Shortcuts import Shortcuts
 from Code.Translations import WSelectLanguage
-from Code.Z import XRun
+from Code.Z import XRun, Util
 
 
-class GlobalFilter(QtCore.QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.Type.KeyPress:
-            m = event.modifiers().value
-            if (m & QtCore.Qt.KeyboardModifier.AltModifier.value) > 0:
-                if event.key() == QtCore.Qt.Key.Key_0:
-                    self.launch_other_instance()
-                    return True  # True = evento consumido, no se propaga
-        return super().eventFilter(obj, event)
-
-    @staticmethod
-    def launch_other_instance():
-        shortcuts = Shortcuts.Shortcuts(Code.procesador)
-        resp = shortcuts.menu_base(False)
-        if resp is not None:
-            XRun.run_lucas(f"{resp.key}.shortcut")
-
+# class GlobalFilter(QtCore.QObject):
+#     def eventFilter(self, obj, event):
+#         if event.type() == QtCore.QEvent.Type.KeyPress:
+#             m = event.modifiers().value
+#             if (m & QtCore.Qt.KeyboardModifier.AltModifier.value) > 0:
+#                 if event.key() == QtCore.Qt.Key.Key_0:
+#                     self.launch_other_instance()
+#                     return True  # True = evento consumido, no se propaga
+#         return super().eventFilter(obj, event)
+#
+#     @staticmethod
+#     def launch_other_instance():
+#         shortcuts = Shortcuts.Shortcuts(Code.procesador)
+#         resp = shortcuts.menu_base(False)
+#         if resp is not None:
+#             XRun.run_lucas(f"{resp.key}.shortcut")
+#
 
 def run_gui(procesador):
+
+    if Util.is_linux() and (os.environ.get("XDG_SESSION_TYPE") == "wayland" or os.environ.get("WAYLAND_DISPLAY")):
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+        # sudo apt install libxcb-cursor0  en Wayland
+
     main_config = Configuration.Configuration("")
     main_config.lee()
+
+    QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+    QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseStyleSheetPropagationInWidgetStyles, True)
+    QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 
     app = QtWidgets.QApplication([])
-    filtro = GlobalFilter()
-    app.installEventFilter(filtro)  #
+    app.setEffectEnabled(QtCore.Qt.UIEffect.UI_FadeMenu, True)  # Agregar
+
+    # filtro = GlobalFilter()
+    # app.installEventFilter(filtro)  #
 
     first_run = main_config.paths.is_first_time
     main_config.lee()  # Necesaria la doble lectura, para que _ permanezca como builting tras QApplication
@@ -128,7 +139,7 @@ class WPassword(QtWidgets.QDialog):
         lb_p = Controles.LB(self, f"{_('Password')}:").set_font(font)
         self.edP = Controles.ED(self).password().set_font(font)
 
-        btaceptar = Controles.PB(self, _("Accept"), rutina=self.accept, plano=False).set_font(font)
+        btaceptar = Controles.PB(self, _("Accept"), rutina=self.run_accept, plano=False).set_font(font)
         btcancelar = Controles.PB(self, _("Cancel"), rutina=self.reject, plano=False).set_font(font)
 
         ly = Colocacion.G()
@@ -142,10 +153,17 @@ class WPassword(QtWidgets.QDialog):
         self.setLayout(layout)
         self.edP.setFocus()
 
+        self.usuario = None
+
     def resultado(self):
+        return self.usuario
+
+    def run_accept(self):
         nusuario = self.cbU.valor()
         usuario = self.liUsuarios[nusuario]
-        return usuario if self.edP.texto().strip() == usuario.password else None
+        self.usuario = usuario if self.edP.texto().strip() == usuario.password else None
+
+        self.accept()
 
 
 def pide_usuario(li_usuarios):

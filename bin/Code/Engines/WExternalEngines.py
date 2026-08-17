@@ -5,7 +5,7 @@ from PySide6 import QtCore, QtWidgets
 
 import Code
 from Code.Z import Util
-from Code.Engines import Engines, WEngines
+from Code.Engines import Engines, WEngines, SelectEngines
 from Code.QT import (
     Colocacion,
     Columnas,
@@ -17,7 +17,7 @@ from Code.QT import (
     LCDialog,
     QTDialogs,
     QTMessages,
-    SelectFiles
+    SelectFiles,
 )
 
 
@@ -152,7 +152,7 @@ class WExternalEngines(LCDialog.LCDialog):
         if resp is not None:
             folder_engine = os.path.dirname(self.engine.path_exe)
             if resp == "select_file":
-                path_file = SelectFiles.leeCreaFichero(self, folder_engine, "*", _("Select a file"))
+                path_file = SelectFiles.read_or_create_file(self, folder_engine, "*", _("Select a file"))
                 if path_file:
                     folder_file = os.path.dirname(path_file)
                     if Util.same_path(folder_file, folder_engine):
@@ -161,7 +161,7 @@ class WExternalEngines(LCDialog.LCDialog):
                     return
                 value = path_file
             elif resp == "select_folder":
-                path_folder = SelectFiles.get_existing_directory(self, folder_engine,  _("Select a folder"))
+                path_folder = SelectFiles.get_existing_directory(self, folder_engine, _("Select a folder"))
                 if path_folder:
                     value = path_folder
                 else:
@@ -248,7 +248,7 @@ class WConfExternals(QtWidgets.QWidget):
 
         self.grid = None
 
-        self.grid = Grid.Grid(self, o_columns, complete_row_select=True)
+        self.grid = Grid.GridDragDrop(self, o_columns, complete_row_select=True)
         self.owner.register_grid(self.grid)
 
         layout = Colocacion.V().control(tb).control(self.grid).margen(0)
@@ -279,6 +279,8 @@ class WConfExternals(QtWidgets.QWidget):
             li = [eng.save() for eng in self.lista_motores]
             Util.save_pickle(Code.configuration.paths.file_external_engines(), li)
             Code.configuration.engines.reset_external()
+            if SelectEngines.select_engines is not None:
+                SelectEngines.select_engines.redo_external_engines()
 
     def grid_cambiado_registro(self, grid, row, _obj_column):
         if grid == self.grid:
@@ -396,15 +398,18 @@ class WConfExternals(QtWidgets.QWidget):
     def grid_doble_click(self, _grid, _row, _obj_column):
         QtCore.QTimer.singleShot(0, self.modificar)
 
+    def _update_move(self, target):
+        self.grid.goto(target, 0)
+        self.grid.refresh()
+        self.set_changed()
+
     def arriba(self):
         row = self.grid.recno()
         if row > 0:
             li = self.lista_motores
             a, b = li[row], li[row - 1]
             li[row], li[row - 1] = b, a
-            self.grid.goto(row - 1, 0)
-            self.grid.refresh()
-            self.set_changed()
+            self._update_move(row - 1)
 
     def abajo(self):
         row = self.grid.recno()
@@ -412,9 +417,30 @@ class WConfExternals(QtWidgets.QWidget):
         if row < len(li) - 1:
             a, b = li[row], li[row + 1]
             li[row], li[row + 1] = b, a
-            self.grid.goto(row + 1, 0)
-            self.grid.refresh()
-            self.set_changed()
+            self._update_move(row + 1)
+
+    def grid_mover_filas(self, _grid, li_rows, target_row):
+        lic = self.lista_motores
+
+        # 1. Obtener los objetos/datos que se van a mover
+        items_a_mover = [lic[i] for i in li_rows]
+
+        # 2. Borrar las filas originales (en orden inverso para no alterar los índices)
+        for i in sorted(li_rows, reverse=True):
+            del lic[i]
+
+        # 3. Ajustar el índice de destino si se han borrado elementos antes de él
+        borrados_antes = sum(1 for i in li_rows if i < target_row)
+        target_row -= borrados_antes
+
+        # 4. Insertar los elementos en la nueva posición
+        for item in reversed(items_a_mover):
+            lic.insert(target_row, item)
+
+        self._update_move(target_row)
+
+        return True
+
 
     def borrar(self):
         row = self.grid.recno()
@@ -533,9 +559,7 @@ class WEngineFast(QtWidgets.QDialog):
         if alias.lower() in self.st_other_alias:
             QTMessages.message_error(
                 self,
-                _(
-                    "There is already another engine with the same alias, the alias must change in order to have both."
-                ),
+                _("There is already another engine with the same alias, the alias must change in order to have both."),
             )
             return
         self.external_engine.key = alias

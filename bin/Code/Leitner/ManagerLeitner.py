@@ -1,10 +1,11 @@
 import time
 
+from PySide6 import QtCore
 from Code.Base import Game
-from Code.Base.Constantes import GT_TACTICS, ST_ENDGAME, ST_PLAYING, TB_ADVICE, TB_CLOSE, ON_TOOLBAR
+from Code.Base.Constantes import GT_TACTICS, ST_ENDGAME, ST_PLAYING, TB_ADVICE, TB_CLOSE, ON_TOOLBAR, TB_CONFIG, TB_NEXT
 from Code.Leitner import Leitner
 from Code.ManagerBase import Manager
-from Code.QT import QTMessages
+from Code.QT import QTMessages, QTDialogs, Iconos
 from Code.Z import FNSLine
 
 
@@ -20,20 +21,40 @@ class ManagerLeitner(Manager.Manager):
     requested_help: bool
     with_error: bool
     ini_clock: float
+    jump_auto: bool
+    key_config: str = "LEITNER_MANAGER"
+    session_finished: bool
+
+    def config_leitner(self):
+        menu = QTDialogs.LCMenu(self.main_window)
+        icon = Iconos.Checked() if self.jump_auto else Iconos.Unchecked()
+        # title = _("Disable") if self.jump_auto else _("Enable")
+        menu.opcion("jump", _("Jump to the next after solving"), icon)
+        if menu.lanza():
+            self.jump_auto = not self.jump_auto
+            dic = self.configuration.read_variables(self.key_config)
+            dic["JUMP_AUTO"] = self.jump_auto
+            self.configuration.write_variables(self.key_config, dic)
 
     def start(self, leitner_db, pos_db):
         self.leitner = leitner_db.get_leitner(pos_db)
         self.leitner_db = leitner_db
         self.pos_db = pos_db
         self.with_error = False
+        self.session_finished = False
+
+        dic = self.configuration.read_variables(self.key_config)
+        self.jump_auto = dic.get("JUMP_AUTO", False)
 
         self.is_tutor_enabled = False
         self.is_competitive = False
 
-        self.reiniciar_puzzle()
+        if self.check_current():
+            self.reiniciar_puzzle()
 
-    def reiniciar_puzzle(self):
+    def check_current(self) -> bool:
         if len(self.leitner.current_ids_session) == 0:
+            self.session_finished = True
             self.leitner.check_session()
 
             if self.leitner.is_the_end():
@@ -43,9 +64,13 @@ class ManagerLeitner(Manager.Manager):
             QTMessages.message(self.main_window, message)
 
             self.leitner_db.set_leitner(self.pos_db, self.leitner)
-            self.finalizar()
-            return
+            self.with_error = False
+            if self.jump_auto:
+                self.finalizar()
+                return False
+        return True
 
+    def reiniciar_puzzle(self):
         reg_id = self.leitner.current_ids_session[0]
         self.reg = self.leitner.dic_regs[reg_id]
 
@@ -85,7 +110,7 @@ class ManagerLeitner(Manager.Manager):
 
         self.set_label1(f"{self.leitner.reference} - {self.label_puzzle}")
         self.show_info_extra()
-        self.set_toolbar([TB_CLOSE, TB_ADVICE])
+        self.set_toolbar([TB_CLOSE, TB_ADVICE, TB_CONFIG])
 
         self.show_label_positions()
         self.state = ST_PLAYING
@@ -97,7 +122,7 @@ class ManagerLeitner(Manager.Manager):
         self.play_next_move()
 
     def show_label_positions(self):
-        txt = f'{_("Puzzles pending in this session")}: {len(self.leitner.current_ids_session)}'
+        txt = f"{_('Puzzles pending in this session')}: {len(self.leitner.current_ids_session)}"
         html = f'<table border="1" align="center" cellpadding="5"><tr><td><h4>{txt}</h4></td></tr></table>'
         self.set_label2(html)
 
@@ -106,11 +131,12 @@ class ManagerLeitner(Manager.Manager):
         if not move:
             return False
 
+        self.reset_shortcuts_mouse()
         move_obj = self.game_obj.move(self.pos_obj)
         is_main, is_var = move_obj.check_a1h8(move.movimiento())
         if is_main:
             self.add_move(True)
-            self.play_next_move()
+            QtCore.QTimer.singleShot(0, self.play_next_move)
             return True
         elif is_var:
             mens = _("You have selected a correct move, but this line uses another one.")
@@ -140,19 +166,31 @@ class ManagerLeitner(Manager.Manager):
         self.leitner.current_ids_session.remove(reg_id)
         self.leitner_db.set_leitner(self.pos_db, self.leitner)
 
+        jump_to_next = self.jump_auto
+
         if new_box == self.leitner.win_box:
             txt = _("Position won!")
         else:
-            txt = f'{_("Position sent to box")}: {new_box}'
+            txt = f"{_('Position sent to box')}: {new_box}"
 
         if success:
-            txt = f'{_("Correct!")}<br>{txt}'
+            txt = f"{_('Correct!')}<br>{txt}"
         else:
-            txt = f'{_("There have been errors")}<br>{txt}'
-        QTMessages.message(self.main_window, txt)
-        self.with_error = False
+            jump_to_next = False
+            txt = f"{_('There have been errors')}<br>{txt}"
 
-        self.reiniciar_puzzle()
+        self.show_label_positions()
+        QTMessages.message(self.main_window, txt)
+        if not self.check_current():
+            return
+        self.with_error = False
+        if jump_to_next:
+            QtCore.QTimer.singleShot(0, self.reiniciar_puzzle)
+        else:
+            li = [TB_CLOSE, TB_CONFIG]
+            if not self.session_finished:
+                li.append(TB_NEXT)
+            self.set_toolbar(li)
 
     def finalizar(self):
         if self.with_error:
@@ -174,6 +212,13 @@ class ManagerLeitner(Manager.Manager):
             if self.with_error:
                 self.board.show_one_arrow_temp(move_obj.from_sq, move_obj.to_sq, True)
             self.with_error = True
+
+        elif key == TB_CONFIG:
+            self.config_leitner()
+
+        elif key == TB_NEXT:
+            if not self.session_finished:
+                self.reiniciar_puzzle()
 
         else:
             self.routine_default(key)
@@ -206,7 +251,7 @@ class ManagerLeitner(Manager.Manager):
 
     def play_rival(self):
         self.add_move(False)
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def play_human(self):
         self.human_is_playing = True
@@ -226,3 +271,12 @@ class ManagerLeitner(Manager.Manager):
         self.main_window.base.pgn.refresh()
         self.main_window.base.pgn.gobottom(1 if move.is_white() else 2)
         self.board.put_arrow_sc(move.from_sq, move.to_sq)
+
+    def control_teclado(self, nkey: int) -> None:
+        if nkey in (QtCore.Qt.Key.Key_Plus, QtCore.Qt.Key.Key_PageDown):
+            self.run_action(TB_NEXT)
+
+    def list_help_keyboard(self, add_key) -> None:
+        if self.main_window.is_enabled_option_toolbar(TB_NEXT):
+            add_key(f"+/{_('Page Down')}", _("Next"))
+

@@ -1,18 +1,19 @@
 from PySide6 import QtCore, QtWidgets
 
 import Code
-from Code.Analysis import Histogram
+from Code.Analysis import Histogram, Analysis
 from Code.Board import Board
 from Code.Nags import Nags
 from Code.Openings import OpeningsStd
 from Code.QT import Colocacion, Columnas, Controles, Delegados, Grid, Iconos, LCDialog, QTMessages, ScreenUtils
+from Code.Base.Constantes import OPENING,MIDDLEGAME, ENDGAME
 
 
 class WAnalisisGraph(LCDialog.LCDialog):
-    def __init__(self, wowner, manager, alm, show_analysis):
+    def __init__(self, wowner, manager, alm):
         titulo = _("Result of analysis")
         icono = Iconos.Estadisticas()
-        extparam = "estadisticasv2"
+        extparam = "estadisticasv3"
         LCDialog.LCDialog.__init__(self, wowner, titulo, icono, extparam)
         self.setWindowFlags(
             QtCore.Qt.WindowType.WindowCloseButtonHint
@@ -26,8 +27,9 @@ class WAnalisisGraph(LCDialog.LCDialog):
         self.manager = manager
         self.configuration = manager.configuration
         self.with_figurines = self.configuration.x_pgn_withfigurines
-        self.show_analysis = show_analysis
         self.colorWhite = ScreenUtils.qt_color_rgb(231, 244, 254)
+
+        self.dic_phases = {OPENING: "📖", MIDDLEGAME: "⚡", ENDGAME: "🎯"}
 
         self.with_time = False
         for move in alm.lijg:
@@ -37,6 +39,7 @@ class WAnalisisGraph(LCDialog.LCDialog):
 
         def xcol():
             o_columns = Columnas.ListaColumnas()
+            o_columns.nueva("PHASE", "", 26)
             o_columns.nueva("NUM", _("N."), 50, align_center=True)
             o_columns.nueva(
                 "MOVE",
@@ -70,7 +73,7 @@ class WAnalisisGraph(LCDialog.LCDialog):
         ancho_grid = max(grid_b.width_columns_displayables(), ancho_grid) + 24
         self.register_grid(grid_b)
 
-        font = Controles.FontType(puntos=Code.configuration.x_sizefont_infolabels)
+        font = Controles.FontType(puntos=Code.configuration.x_sizefont_infolabels, peso=800)
 
         self.emIndexes = Controles.EM(self, alm.indexesHTML).read_only().set_font(font)
         pb_save = Controles.PB(self, _("Save to game comments"), self.save_indexes, plano=False)
@@ -90,10 +93,10 @@ class WAnalisisGraph(LCDialog.LCDialog):
         w_moves = QtWidgets.QWidget()
         w_moves.setLayout(ly)
 
-        # self.em_moves_old = Controles.EM(self, alm.indexesHTMLold).read_only().set_font(font)
-        # ly = Colocacion.V().control(self.em_moves_old)
-        # w_moves_old = QtWidgets.QWidget()
-        # w_moves_old.setLayout(ly)
+        self.em_moves_old = Controles.EM(self, alm.indexesHTMLold).read_only().set_font(font)
+        ly = Colocacion.V().control(self.em_moves_old)
+        w_moves_old = QtWidgets.QWidget()
+        w_moves_old.setLayout(ly)
 
         self.tab_grid = tab_grid = Controles.Tab()
         tab_grid.new_tab(grid_all, _("All moves"))
@@ -102,7 +105,7 @@ class WAnalisisGraph(LCDialog.LCDialog):
         tab_grid.new_tab(w_idx, _("Indexes"))
         tab_grid.new_tab(w_elo, _("Elo"))
         tab_grid.new_tab(w_moves, _("Moves analyzed"))
-        # tab_grid.new_tab(w_moves_old, _("Summary"))
+        tab_grid.new_tab(w_moves_old, _("Summary"))
         tab_grid.dispatch_change(self.tab_changed)
         self.tabActive = 0
 
@@ -172,7 +175,7 @@ class WAnalisisGraph(LCDialog.LCDialog):
 
         self.setLayout(layout)
 
-        dic_def = {'_SIZE_': '1064,900', 'SP_all': [536, 354]}
+        dic_def = {"_SIZE_": "1064,900", "SP_all": [536, 354]}
         self.restore_video(default_dic=dic_def)
 
         grid_all.gotop()
@@ -198,13 +201,6 @@ class WAnalisisGraph(LCDialog.LCDialog):
     def show_changed(self):
         self.tab_changed(self.tab_grid.currentIndex())
 
-    # def boardSizeChanged(self):
-    #     th = self.board.height()
-    #     self.tab_grid.setFixedHeight(th)
-    #     self.emIndexes.setFixedHeight(th - 72)
-    #     self.adjustSize()
-    #     self.show_changed()
-
     def tab_changed(self, ntab):
         QtWidgets.QApplication.processEvents()
         tab_vis = 0 if ntab >= 3 else ntab
@@ -213,7 +209,6 @@ class WAnalisisGraph(LCDialog.LCDialog):
         for n in range(6):
             self.htotal[n].setVisible(False)
         self.htotal[tab_vis].setVisible(True)
-        # self.adjustSize()
         self.tabActive = ntab
 
     def grid_cambiado_registro(self, grid, row, column):
@@ -221,7 +216,7 @@ class WAnalisisGraph(LCDialog.LCDialog):
 
     def save_indexes(self):
         self.manager.game.set_first_comment(self.alm.indexesRAW, False)
-        QTMessages.temporary_message(self, _("Saved"), 1.8)
+        QTMessages.temporary_message(self, _("Saved"), 0.8)
 
     def grid_left_button(self, grid, row, _column):
         self.board.remove_arrows()
@@ -240,9 +235,8 @@ class WAnalisisGraph(LCDialog.LCDialog):
     def grid_doble_click(self, grid, row, _column):
         move = self.dicLiJG[grid.id][row]
         mrm, pos = move.analysis
-        self.show_analysis(
-            self.procesador,
-            self.procesador.manager_tutor,
+        Analysis.show_analysis(
+            None,
             move,
             self.board.is_white_bottom,
             pos,
@@ -277,6 +271,8 @@ class WAnalisisGraph(LCDialog.LCDialog):
         return None
 
     def grid_alineacion(self, grid, row, obj_column):
+        if obj_column.key == "PHASE":
+            return None
         if grid.id == "A":
             move = self.alm.lijg[row]
             return "i" if move.xsiW else "d"
@@ -290,7 +286,7 @@ class WAnalisisGraph(LCDialog.LCDialog):
         move = self.dicLiJG[grid.id][row]
 
         if column == "NUM":
-            return f" {move.xnum} "
+            return f"{move.xnum}"
 
         elif column in ("MOVE", "BEST"):
             return self._grid_dato_moves_best(obj_column, column, move)
@@ -307,6 +303,9 @@ class WAnalisisGraph(LCDialog.LCDialog):
 
         elif column == "ELO":
             return "%3d" % move.elo if move.elo else ""
+
+        elif column == "PHASE":
+            return self.dic_phases.get(move.phase, "")
 
         return None
 
@@ -328,7 +327,9 @@ class WAnalisisGraph(LCDialog.LCDialog):
             nagc = move.nag_color[1]
             color = Nags.nag_color(nagc)
         else:
-            fenm2 = move.position_before.get_fenm2()
+            pbefore = move.position_before.copia()
+            pbefore.play(from_sq, to_sq, promotion)
+            fenm2 = pbefore.fenm2()
         is_book = OpeningsStd.ap.is_book_fenm2(fenm2)
         book = "O" if is_book else None
 
@@ -394,6 +395,6 @@ class WAnalisisGraph(LCDialog.LCDialog):
         self.hscale(1.0, 1.0)
 
 
-def show_graph(wowner, manager, alm, show_analysis):
-    w = WAnalisisGraph(wowner, manager, alm, show_analysis)
+def show_graph(wowner, manager, alm):
+    w = WAnalisisGraph(wowner, manager, alm)
     w.exec()

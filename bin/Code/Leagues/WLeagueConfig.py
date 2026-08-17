@@ -45,7 +45,7 @@ class WLeagueConfig(LCDialog.LCDialog):
         color_3 = Code.dic_qcolors["WLEAGUECONFIG_3"]
         self.li_colors = [color_1, color_2, color_3]
 
-        self.select_engines = SelectEngines.SelectEngines(w_parent)
+        self.select_engines = SelectEngines.get_select_engines(w_parent)
 
         li_acciones = [
             (_("Save"), Iconos.GrabarFichero(), self.save),
@@ -79,7 +79,7 @@ class WLeagueConfig(LCDialog.LCDialog):
         )
         self.grid = Grid.Grid(self, o_columns, complete_row_select=True, is_editable=True)
         self.register_grid(self.grid)
-        self.grid.setMinimumWidth(self.grid.width_columns_displayables() + 20)
+        self.grid.fix_min_width()
 
         self.bt_engines_more = Controles.PB(self, f"++ {_('Engines')}", rutina=self.add_engines, plano=False).set_icono(
             Iconos.Engines()
@@ -474,4 +474,3 @@ class WLeagueConfig(LCDialog.LCDialog):
     def external_engines(self):
         w = WExternalEngines.WExternalEngines(self)
         w.exec()
-        self.select_engines.redo_external_engines()

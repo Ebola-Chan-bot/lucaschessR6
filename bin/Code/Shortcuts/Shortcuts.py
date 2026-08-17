@@ -133,7 +133,7 @@ class Shortcuts:
         tb_menu = self.get_txtmenu(shortcut.key_menu)
         if column == "OPTION":
             option = tb_menu.locate_key(shortcut.key)
-            return option.label
+            return option.label if option else ""
         if column == "MENU":
             return _F(tb_menu.name)
         return None
@@ -141,22 +141,8 @@ class Shortcuts:
     def remove(self, nshortcut: int) -> None:
         del self.li_shortcuts[nshortcut]
 
-    def go_up(self, nshortcut):
-        self.li_shortcuts[nshortcut], self.li_shortcuts[nshortcut - 1] = (
-            self.li_shortcuts[nshortcut - 1],
-            self.li_shortcuts[nshortcut],
-        )
-
-    def go_down(self, nshortcut):
-        self.li_shortcuts[nshortcut], self.li_shortcuts[nshortcut + 1] = (
-            self.li_shortcuts[nshortcut + 1],
-            self.li_shortcuts[nshortcut],
-        )
-
     @staticmethod
-    def _format_label_and_shortcut(
-            label: str, alt: int, with_add: bool
-    ) -> tuple[str, Optional[str], int]:
+    def _format_label_and_shortcut(label: str, alt: int, with_add: bool) -> tuple[str, Optional[str], int]:
         shortcut_text: Optional[str]
         if alt <= 9 and with_add:
             shortcut_text = f"ALT+{alt}"

@@ -1,5 +1,6 @@
 import time
 
+from PySide6 import QtCore
 from PySide6.QtCore import Qt
 
 from Code.Z import Util
@@ -98,7 +99,7 @@ class ManagerOpeningLinesPositions(ManagerOPL.ManagerOpeningLines):
         self.show_labels()
 
     def show_labels(self):
-        li = [f'{_("Errors")}: {self.errores}']
+        li = [f"{_('Errors')}: {self.errores}"]
         if self.with_help:
             li.append(_("Help activated"))
         self.set_label1("\n".join(li))
@@ -174,7 +175,7 @@ class ManagerOpeningLinesPositions(ManagerOPL.ManagerOpeningLines):
         if is_finished:
             self.end_game()
         elif self.with_automatic_jump:
-            self.reinicio(self.dbop)
+            QtCore.QTimer.singleShot(0, lambda: self.reinicio(self.dbop))
 
     def show_help(self):
         li_moves = self.trposition["MOVES"]
@@ -274,7 +275,7 @@ class ManagerOpeningLinesPositions(ManagerOPL.ManagerOpeningLines):
             self.move_the_pieces(move.list_piece_moves)
             self.add_move(move, True)
         self.goto_end()
-        self.posicion_terminada()
+        QtCore.QTimer.singleShot(0, self.posicion_terminada)
         return True
 
     def control_teclado(self, nkey):

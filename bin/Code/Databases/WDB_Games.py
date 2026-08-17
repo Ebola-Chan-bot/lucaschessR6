@@ -173,7 +173,6 @@ class WGames(QtWidgets.QWidget):
                 _X(_("Create training to %1"), eti),
                 Iconos.Carpeta(),
             )
-
         resp = menu.lanza()
         if resp:
             resp()
@@ -742,7 +741,7 @@ class WGames(QtWidgets.QWidget):
         self.db_games.filter_positions(li_seq, [rowid for rowid, pos in li_games])
         self.grid.refresh()
         self.grid_cambiado_registro(None, 0, None)
-        txt = f'_("Games"): {self.db_games.reccount()} | {_("Filter")}: {fen}'
+        txt = f'{_("Games")}: {self.db_games.reccount()} | {_("Filter")}: {fen}'
         self.status.showMessage(txt, 0)
 
     def tw_remove_tb(self):
@@ -796,7 +795,7 @@ class WGames(QtWidgets.QWidget):
 
     def tw_import(self):
         menu = QTDialogs.LCMenu(self)
-        menu.opcion(self.tw_importar_pgn_unified, _("Import PGN"), Iconos.Import8())
+        menu.opcion(self.tw_importar_pgn_unified, _("PGN"), Iconos.PGN())
         menu.separador()
         menu.opcion(self.tw_importar_db, _("From other database"), Iconos.Databases())
         menu.separador()
@@ -823,10 +822,12 @@ class WGames(QtWidgets.QWidget):
         w = WDB_ExportPGN.WExportPGN(self, self.db_games, li_sel)
         w.exec()
 
-    def tw_odt(self):
+    def tw_export_odt_list(self, li_registros):
         key_var = "ODT"
         dic = self.configuration.read_variables(key_var)
         folder = dic.get("FOLDER_SAVE", self.configuration.paths.folder_userdata())
+        if not Util.exist_folder(folder):
+            folder = self.configuration.paths.folder_userdata()
         path = os.path.join(folder, f"{self.db_games.get_name()}.odt")
 
         form = FormLayout.FormLayout(self, _("Export"), Iconos.ODT(), minimum_width=640)
@@ -835,13 +836,6 @@ class WGames(QtWidgets.QWidget):
         form.separador()
         form.checkbox(_("Skip the first move"), False)
         form.separador()
-
-        li_registros_selected = self.grid.list_selected_recnos()
-        li_registros_total = list(range(self.db_games.reccount()))
-        nreg_selected = len(li_registros_selected)
-        if nreg_selected > 1:
-            form.checkbox(f"{_('Only selected games')} ({nreg_selected})", True)
-            form.separador()
 
         resultado = form.run()
         if not resultado:
@@ -856,10 +850,6 @@ class WGames(QtWidgets.QWidget):
         self.configuration.write_variables(key_var, dic)
 
         skip_first = li_gen[1]
-        if nreg_selected > 1:
-            li_registros = li_registros_selected if li_gen[2] else li_registros_total
-        else:
-            li_registros = li_registros_total
 
         with QTProgressBars.ProgressBarWithTime(self, _("Export"), show_time=True) as bar:
             li_fens_pgn = self.db_games.get_fens_pgn(li_registros, skip_first, bar)
@@ -1089,58 +1079,90 @@ class WGames(QtWidgets.QWidget):
         if w.exec():
             dic_cambios = w.dic_cambios
 
-            um = QTMessages.working(self)
+            while True:
+                with QTMessages.working(self, with_cancel=True, with_progressbar=True) as um:
+                    um.set_hide_progressbar()
 
-            dcabs = self.db_games.read_config("dcabs", {})
-            reinit = False
+                    dcabs = self.db_games.read_config("dcabs", {})
+                    reinit = False
 
-            # Primero CREATE
-            for dic in dic_cambios["CREATE"]:
-                self.db_games.add_column(dic["KEY"])
-                dcabs[dic["KEY"]] = dic["LABEL"]
-                reinit = True
+                    # 1 CREATE
+                    for dic in dic_cambios["CREATE"]:
+                        self.db_games.add_column(dic["KEY"])
+                        dcabs[dic["KEY"]] = dic["LABEL"]
+                        reinit = True
 
-            # Segundo FILL
-            li_field_value = []
-            for dic in dic_cambios["FILL"]:
-                li_field_value.append((dic["KEY"], dic["VALUE"]))
-            if li_field_value:
-                self.db_games.fill(li_field_value)
+                    # 2 FILL
+                    li_field_value = []
+                    for dic in dic_cambios["FILL"]:
+                        li_field_value.append((dic["KEY"], dic["VALUE"]))
+                    if li_field_value:
+                        self.db_games.fill(li_field_value)
 
-            # Segundo FILL_PGN
-            li_fill_pgn = []
-            for dic in dic_cambios["FILL_PGN"]:
-                li_fill_pgn.append(dic["KEY"])
-            if li_fill_pgn:
-                for key in li_fill_pgn:
-                    um.label(f"{key}: {w.fill_pgn}")
-                    self.db_games.fill_pgn(key)
+                    if um.is_canceled():
+                        break
 
-            # Segundo FILL_PGN
-            li_fill_opening = []
-            for dic in dic_cambios["FILL_OPENING"]:
-                li_fill_opening.append(dic["KEY"])
-            if li_fill_opening:
-                for key in li_fill_opening:
-                    um.label(f"{key}: {w.fill_opening}")
-                    self.db_games.fill_opening(key)
+                    # 3 FILL_PGN
+                    li_fill_pgn = []
+                    for dic in dic_cambios["FILL_PGN"]:
+                        li_fill_pgn.append(dic["KEY"])
+                    if li_fill_pgn:
+                        for key in li_fill_pgn:
+                            um.label(f"{key}: {w.fill_pgn}")
+                            self.db_games.fill_pgn(key, um)
 
-            # Tercero RENAME_LBL
-            for dic in dic_cambios["RENAME"]:
-                dcabs[dic["KEY"]] = dic["LABEL"]
-                reinit = True
+                    if um.is_canceled():
+                        break
 
-            self.db_games.save_config("dcabs", dcabs)
+                    # 4 Opening
+                    li_fill_opening = []
+                    for dic in dic_cambios["FILL_OPENING"]:
+                        li_fill_opening.append(dic["KEY"])
+                    if li_fill_opening:
+                        for key in li_fill_opening:
+                            um.label(f"{key}: {w.fill_opening}")
+                            self.db_games.fill_opening(key, um)
 
-            # Cuarto REMOVE
-            lir = dic_cambios["REMOVE"]
-            if len(lir) > 0:
-                um = QTMessages.working(self)
-                lista = [x["KEY"] for x in lir]
-                self.db_games.remove_columns(lista)
-                self.set_changes(True)
-                reinit = True
-                um.final()
+                    if um.is_canceled():
+                        break
+
+                    # 5 ECO
+                    # li_fill_eco = []
+                    # for dic in dic_cambios["FILL_ECO"]:
+                    #     li_fill_eco.append(dic["KEY"])
+                    # if li_fill_eco:
+                    #     for key in li_fill_eco:
+                    #         um.label(f"{key}: {w.fill_eco}")
+                    #         self.db_games.fill_eco(key, um)
+
+                    # 6 ECO-OPENING
+                    li_fill_eco_opening = []
+                    for dic in dic_cambios["FILL_ECO_OPENING"]:
+                        li_fill_eco_opening.append(dic["KEY"])
+                    if li_fill_eco_opening:
+                        for key in li_fill_eco_opening:
+                            um.label(f"{key}: {w.fill_eco_opening}")
+                            self.db_games.fill_eco_opening(key, um)
+
+                    if um.is_canceled():
+                        break
+
+                    # Tercero RENAME_LBL
+                    for dic in dic_cambios["RENAME"]:
+                        dcabs[dic["KEY"]] = dic["LABEL"]
+                        reinit = True
+
+                    self.db_games.save_config("dcabs", dcabs)
+
+                    # Cuarto REMOVE
+                    lir = dic_cambios["REMOVE"]
+                    if len(lir) > 0:
+                        lista = [x["KEY"] for x in lir]
+                        self.db_games.remove_columns(lista)
+                        self.set_changes(True)
+                        reinit = True
+
+                    break
 
             if reinit:
                 self.wb_database.reinit_sinsalvar()  # para que no cree de nuevo al salvar configuración
@@ -1397,7 +1419,7 @@ class WGames(QtWidgets.QWidget):
             return dic
 
         li_registros_selected = self.grid.list_selected_recnos()
-        li_registros_total = range(self.db_games.reccount())
+        li_registros_total = list(range(self.db_games.reccount()))
 
         WDB_Trainings.create_training_positions(
             self,
@@ -1427,11 +1449,9 @@ class WGames(QtWidgets.QWidget):
             nregs = self.db_games.reccount()
             li_seleccionadas = None
 
-        self.tw_massive_analysis_n_workers(alm, nregs, li_seleccionadas)
-
-    def tw_massive_analysis_n_workers(self, alm, nregs, li_seleccionadas):
-        rac = RunAnalysisControl.AnalysisMassiveWithWorkers(self, alm, nregs, li_seleccionadas)
-        rac.run()
+        self.setDisabled(True)
+        RunAnalysisControl.lanzar_analisis_masivo(self, alm, nregs, li_seleccionadas)
+        self.setDisabled(False)
 
         if alm.accuracy_tags or alm.themes_tags:
             self.rehaz_columnas()
@@ -1522,6 +1542,7 @@ class WGames(QtWidgets.QWidget):
             return
         (
             plies,
+            in_opening,
             st_side,
             st_results,
             ru,
@@ -1533,10 +1554,10 @@ class WGames(QtWidgets.QWidget):
         ) = resp
         db = UtilSQL.DictBig()
 
-        def fsum(keymove, pt):
+        def fadd(keymove, count, pts_add):
             num, pts = db.get(keymove, (0, 0))
-            num += 1
-            pts += pt
+            num += count
+            pts += pts_add
             db[keymove] = num, pts
 
         dltmp = PolyglotImportExports.ImportarPGNDB(self, titulo)
@@ -1545,12 +1566,13 @@ class WGames(QtWidgets.QWidget):
         ok = PolyglotImportExports.add_db(
             self.db_games,
             plies,
+            in_opening,
             st_results,
             st_side,
             li_players,
             ru,
             dltmp.dispatch,
-            fsum,
+            fadd,
         )
         dltmp.close()
 
@@ -1634,7 +1656,7 @@ class WGames(QtWidgets.QWidget):
 
     def tw_exportar_csv(self, only_selected):
         dic_csv = self.configuration.read_variables("CSV")
-        path_csv = SelectFiles.salvaFichero(
+        path_csv = SelectFiles.save_file(
             self,
             f"{_('Export')} - {_('To a CSV file')}",
             dic_csv.get("FOLDER", self.configuration.paths.folder_userdata()),
@@ -1690,16 +1712,16 @@ class WGames(QtWidgets.QWidget):
         if not canceled:
             Util.startfile(path_csv)
 
-    def tw_exportar_pgn_lista(self, lista):
-        self.tw_exportar_pgn_lista_impl(lista)
+    def tw_export_pgn_list(self, lista):
+        self.tw_export_pgn_list_impl(lista)
 
-    def tw_exportar_csv_lista(self, lista):
+    def tw_export_csv_list(self, lista):
         self.tw_exportar_csv_impl(lista)
 
-    def tw_exportar_db_lista(self, lista):
+    def tw_export_db_list(self, lista):
         self.tw_exportar_db(lista)
 
-    def tw_exportar_pgn_lista_impl(self, lista):
+    def tw_export_pgn_list_impl(self, lista):
         w = WindowSavePGN.WSaveVarios(self, with_remcomments=True)
         if w.exec():
             dic_result = w.dic_result
@@ -1735,13 +1757,13 @@ class WGames(QtWidgets.QWidget):
 
                 if not pb.is_canceled():
                     self.set_changes(False)
-                pb.close()
+                    pb.close()
                 ws.close()
                 QTMessages.temporary_message(self, _("Saved"), 1.2)
 
     def tw_exportar_csv_impl(self, lista):
         dic_csv = self.configuration.read_variables("CSV")
-        path_csv = SelectFiles.salvaFichero(
+        path_csv = SelectFiles.save_file(
             self,
             f"{_('Export')} - {_('To a CSV file')}",
             dic_csv.get("FOLDER", self.configuration.paths.folder_userdata()),
@@ -1849,7 +1871,7 @@ class WGames(QtWidgets.QWidget):
 
     def tw_importar_lichess_puzzles(self):
         mens_base = _("You must follow the next steps")
-        mens_puzzles = _("Download the puzzles in csv format from lichess website")
+        mens_puzzles = _("Download the puzzles in csv format from LiChess website")
         link_puzzles = "https://database.lichess.org/#puzzles"
 
         mens_7z = _("Uncompress this file with a tool like PeaZip")
@@ -1890,7 +1912,7 @@ class WGames(QtWidgets.QWidget):
         if not QTMessages.pregunta(self, mensaje, label_yes=_("Continue"), label_no=_("Cancel")):
             return
 
-        path = SelectFiles.leeFichero(
+        path = SelectFiles.read_file(
             self,
             self.configuration.paths.folder_userdata(),
             "csv",

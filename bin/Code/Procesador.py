@@ -17,6 +17,7 @@ from Code.Base.Constantes import (
     GT_FICS,
     GT_FIDE,
     GT_HUMAN,
+    GT_GRID,
     GT_LICHESS,
     GT_MICELO,
     GT_WICKER,
@@ -42,6 +43,7 @@ from Code.Books import (
 )
 from Code.CompetitionWithTutor import ManagerCompeticion
 from Code.Competitions import ManagerElo, ManagerFideFicsLichess, ManagerMicElo, ManagerWicker
+from Code.Competitions import ManagerGrid
 from Code.Config import Configuration, WindowConfig, WindowUsuarios
 from Code.Databases import DBgames
 from Code.Engines import (
@@ -73,7 +75,8 @@ from Code.Menus import (
     TrainMenu,
 )
 from Code.Openings import OpeningsStd
-from Code.PlayAgainstEngine import ManagerAlbum, ManagerPerson, ManagerPlayAgainstEngine, WPlayAgainstEngine
+from Code.PlayAgainstEngine import ManagerPerson, ManagerPlayAgainstEngine, WPlayAgainstEngine
+from Code.Albums import ManagerAlbum
 from Code.PlayHuman import ManagerPlayHuman
 from Code.QT import Iconos, Piezas, QTDialogs
 from Code.Routes import ManagerRoutes, Routes, WindowRoutes
@@ -97,7 +100,7 @@ class Procesador:
     manager_analyzer: EngineManagerAnalysis.EngineManagerAnalysis | None
     in_the_presentation: bool
     initial_position: Position.Position
-    kibitzers_manager: KibitzersManager.Manager
+    kibitzers_manager: KibitzersManager.Manager = None
     cpu: CPU.CPU
     manager_rival = None
 
@@ -256,6 +259,7 @@ class Procesador:
         self.board.set_position(self.initial_position)
         self.board.remove_movables()
         self.board.remove_arrows()
+        self.board.hide_selection()
         self.main_window.adjust_size()
         self.main_window.set_title()
         self.close_engines()
@@ -355,8 +359,8 @@ class Procesador:
         return self.get_manager_analyzer()
 
     @staticmethod
-    def create_manager_analysis(
-            engine: Engines.Engine, mstime: int, depth: int, nodes: int, multipv: int | str, priority=None
+    def create_manager_analyzer_var(
+        engine: Engines.Engine, mstime: int, depth: int, nodes: int, multipv: int | str, priority=None
     ):
         assert type(mstime) is int and mstime >= 0
         assert type(depth) is int and depth >= 0
@@ -372,8 +376,7 @@ class Procesador:
 
     @staticmethod
     def create_manager_engine(
-            engine: Engines.Engine, mstime: int, depth: int, nodes: int, has_multipv=False, priority=None,
-            faster_mode=False
+        engine: Engines.Engine, mstime: int, depth: int, nodes: int, has_multipv=False, priority=None, faster_mode=False
     ):
         assert type(mstime) is int and mstime >= 0
         assert type(depth) is int and depth >= 0
@@ -513,6 +516,8 @@ class Procesador:
                     self.manager = ManagerSwiss.ManagerSwiss(self)
                 elif tp == GT_HUMAN:
                     self.manager = ManagerPlayHuman.ManagerPlayHuman(self)
+                elif tp == GT_GRID:
+                    self.manager = ManagerGrid.ManagerGrid(self)
                 else:
                     return
                 self.manager.run_adjourn(dic)
@@ -609,7 +614,7 @@ class Procesador:
 
     def play_solo_extern(self, file_lcsb):
         self.manager = ManagerSolo.ManagerSolo(self)
-        self.manager.leeFichero(file_lcsb)
+        self.manager.read_file(file_lcsb)
 
     def play_against_extern(self, recplay):
         recplay = int(recplay)
@@ -698,11 +703,6 @@ class Procesador:
         tmr = ToolsMenuRun.ToolsMenuRun(tm)
         tmr.pgn_read(pgn)
 
-    def select_1_pgn(self, wparent=None):
-        tm = ToolsMenu.ToolsMenu(self)
-        tmr = ToolsMenuRun.ToolsMenuRun(tm)
-        return tmr.select_1_pgn(wparent)
-
     def strenght101(self):
         tm = CompeteMenu.CompeteMenu(self)
         tm.strenght101()
@@ -728,15 +728,18 @@ class Procesador:
         )
 
     def manager_game(
-            self,
-            window,
-            game,
-            is_complete,
-            only_consult,
-            father_board,
-            with_previous_next=None,
-            save_routine=None,
+        self,
+        window,
+        game,
+        is_complete,
+        only_consult,
+        father_board,
+        with_previous_next=None,
+        save_routine=None,
     ):
+        if self.kibitzers_manager is None:
+            self.kibitzers_manager = KibitzersManager.Manager(self)
+
         clon_procesador = ProcesadorVariations(
             window,
             self.manager_tutor,
@@ -798,6 +801,11 @@ class Procesador:
 
     def users(self):
         WindowUsuarios.edit_users(self)
+
+    def select_1_pgn(self, wparent=None):
+        tm = ToolsMenu.ToolsMenu(self)
+        tmr = ToolsMenuRun.ToolsMenuRun(tm)
+        return tmr.select_1_pgn(wparent)
 
 
 class ProcesadorVariations(Procesador):

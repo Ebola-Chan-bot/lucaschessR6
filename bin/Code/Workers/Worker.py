@@ -57,8 +57,8 @@ class Worker(QtWidgets.QWidget):
         self.run_worker = run_worker
         worker = _("Worker")
         if self.run_worker.num_worker:
-            worker = f'{worker} [#{run_worker.num_worker}]'
-        self.setWindowTitle(f'{run_worker.name} - {worker} ')
+            worker = f"{worker} [#{run_worker.num_worker}]"
+        self.setWindowTitle(f"{run_worker.name} - {worker} ")
         self.setWindowIcon(run_worker.icon)
 
         self.tb = QTDialogs.LCTB(self, icon_size=24)
@@ -231,16 +231,15 @@ class Worker(QtWidgets.QWidget):
         return engine_manager
 
     def looking_for_work(self):
-        try:
-            self.xmatch = self.run_worker.get_other_match()
-        except sqlite3.IntegrityError:
-            self.xmatch = None
-        if self.xmatch is None:
-            self.finalize()
-            return
-        self.procesa_match()
-        if not self.is_closed:
-            self.looking_for_work()
+        while not self.is_closed:
+            try:
+                self.xmatch = self.run_worker.get_other_match()
+            except sqlite3.IntegrityError:
+                self.xmatch = None
+            if self.xmatch is None:
+                self.finalize()
+                break
+            self.procesa_match()
 
     def procesa_match(self):
         self.pon_estado(ST_PLAYING)
@@ -269,6 +268,7 @@ class Worker(QtWidgets.QWidget):
         }
         for side in (WHITE, BLACK):
             self.lb_player[side].set_text(rival[side].name)
+            self.lb_player[side].show()
 
         self.dic_engine_managers = {}
 
@@ -335,7 +335,7 @@ class Worker(QtWidgets.QWidget):
                 self.save_game_done()
 
     def save_game_done(self):
-        self.game.set_tag("Site", Code.lucas_chess)
+        self.game.set_tag("Site", f"{Code.lucas_chess} {Code.VERSION}")
         self.game.set_tag("Event", self.run_worker.name)
         self.run_worker.add_tags_game(self.game)
 
@@ -393,7 +393,6 @@ class Worker(QtWidgets.QWidget):
         if resp is not None:
             self.game.set_termination(TERMINATION_ADJUDICATION, resp)
             self.save_game_done()
-            self.looking_for_work()
 
     def set_clock(self):
         if self.is_closed or self.game_finished():
@@ -430,7 +429,7 @@ class Worker(QtWidgets.QWidget):
 
     def set_clock_label(self, side, tm, tm2):
         if tm2 is not None:
-            tm += f"<br><FONT SIZE=\"-4\">{tm2}"
+            tm += f'<br><FONT SIZE="-4">{tm2}'
         self.lb_clock[side].set_text(tm)
 
     def set_clock_white(self, tm, tm2):
@@ -510,7 +509,7 @@ class Worker(QtWidgets.QWidget):
         )
 
         self.start_clock(is_white)
-        rm = engine_manager.play(game=self.game, dispacher=self.gui_dispatch)
+        rm = engine_manager.play(game=self.game, dispatcher=self.gui_dispatch)
         if self.state == ST_PAUSE:
             self.board.remove_movables()
             return True
@@ -591,10 +590,11 @@ class Worker(QtWidgets.QWidget):
                 pts = rm.puntos
                 if not si_w:
                     pts = -pts
-                info = f"{float(pts / 100.0):+0.2f}"
+                info = f"{pts / 100.0:+0.2f}"
 
             nag, color_nag = mrm.set_nag_color(rm)
-            st_nags.add(nag)
+            if nag:
+                st_nags.add(nag)
 
         if move.in_the_opening:
             indicador_inicial = "R"
@@ -610,7 +610,8 @@ class Worker(QtWidgets.QWidget):
             p = Game.Game(self.game.last_position)
             p.read_pv(rm.pv)
             rm.is_white = self.game.last_position.is_white
-            txt = f"<b>[{rm.name}]</b> ({rm.abbrev_text()}) {p.pgn_translated()}"
+            pgn = p.pgn_html() if self.configuration.x_pgn_withfigurines else p.pgn_translated()
+            txt = f"<b>[{rm.name}]</b> ({rm.abbrev_text()}) {pgn}"
             self.lb_rotulo3.set_text(txt)
             self.show_pv(rm.pv, 1)
         return self.set_clock()
@@ -700,7 +701,6 @@ class Worker(QtWidgets.QWidget):
 
     def move_the_pieces(self, li_movs):
         if self.run_worker.slow_pieces:
-
             rapidez = self.configuration.pieces_speed_porc()
             cpu = self.cpu
             cpu.reset()
@@ -714,7 +714,7 @@ class Worker(QtWidgets.QWidget):
                         dc = ord(from_sq[0]) - ord(to_sq[0])
                         df = int(from_sq[1]) - int(to_sq[1])
                         # Maxima distancia = 9.9 ( 9,89... sqrt(7**2+7**2)) = 4 seconds
-                        dist = (dc ** 2 + df ** 2) ** 0.5
+                        dist = (dc**2 + df**2) ** 0.5
                         seconds = 4.0 * dist / (9.9 * rapidez)
                     cpu.move_piece(movim[1], movim[2], is_exclusive=False, seconds=seconds)
 
@@ -724,7 +724,7 @@ class Worker(QtWidgets.QWidget):
             # segundo los borrados
             for movim in li_movs:
                 if movim[0] == "b":
-                    cpu.wait(seconds * 0.80 / rapidez)
+                    cpu.wait(seconds * 0.80)
                     cpu.remove_piece(movim[1])
 
             # tercero los cambios

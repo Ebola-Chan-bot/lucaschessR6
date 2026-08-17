@@ -192,25 +192,16 @@ class MaintainGeometry:
         self.window.setGeometry(self.geometry)
 
 
-# def shrink(widget: QtWidgets.QWidget):
-#     pos = widget.pos()
-#     r = widget.geometry()
-#     r.setWidth(0)
-#     r.setHeight(0)
-#     widget.setGeometry(r)
-#     widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
-#     widget.adjustSize()
-#     if widget.layout():
-#         widget.layout().activate()
-#     widget.move(pos)
-
-
 def shrink(widget: QtWidgets.QWidget):
-    # if widget.layout():
-    #     widget.layout().invalidate()
-    widget.layout().activate()  # fuerza recálculo del layout
-    widget.adjustSize()
-    # widget.resize(widget.minimumSizeHint())
+    if widget.layout():
+        widget.layout().invalidate()
+
+    def sh():
+        widget.layout().activate()  # fuerza recálculo del layout
+        widget.adjustSize()
+        widget.resize(widget.minimumSizeHint())
+
+    QTUtils.deferred_call(0, sh)
 
 
 class EstadoWindow:
@@ -230,4 +221,3 @@ def get_width_text(widget, text):
 def get_height_text(widget, text):
     metrics = QtGui.QFontMetrics(widget.font())
     return metrics.boundingRect(text).height()
-

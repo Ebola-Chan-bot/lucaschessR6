@@ -12,7 +12,7 @@ from Code.Base.Constantes import (
     BOOK_RANDOM_PROPORTIONAL,
     BOOK_RANDOM_UNIFORM,
 )
-from Code.Books import DBPolyglot, Polyglot
+from Code.Books import Polyglot
 
 
 class ListBooks:
@@ -130,7 +130,8 @@ class Book:
     def __init__(self, tipo, name, path, pordefecto, extras=None):
         self.tipo = tipo
         self.name = name
-        self.path = Util.norm_path(os.fspath(path))
+        self.path = Util.norm_path(path)
+        self.path = Util.bug_path(self.path)
         self.pordefecto = pordefecto
         self.orden = 100  # futuro ?
         self.extras = extras  # futuro ?
@@ -151,7 +152,7 @@ class Book:
     def from_dic(self, dic):
         self.tipo = dic["tipo"]
         self.name = dic["name"]
-        self.path = Util.norm_path(os.fspath(dic["path"]))
+        self.path = dic["path"]
         self.pordefecto = dic["pordefecto"]
         self.orden = dic["orden"]
         self.extras = dic["extras"]
@@ -165,25 +166,11 @@ class Book:
     def existe(self):
         return os.path.isfile(self.path)
 
-    def is_factory_polyglot(self):
-        return os.fspath(self.path).lower().endswith(".lcbin")
-
     def polyglot(self):
-        self.book = None if self.is_factory_polyglot() else Polyglot.Polyglot(self.path)
-
-    def _entries(self, fen):
-        if self.is_factory_polyglot():
-            with DBPolyglot.DBPolyglot(self.path) as db_polyglot:
-                li = db_polyglot.get_entries(fen)
-            li.sort(key=lambda entry: entry.weight, reverse=True)
-            return li
-
-        if not getattr(self, "book", None):
-            self.book = Polyglot.Polyglot(self.path)
-        return self.book.lista(self.path, fen)
+        self.book = Polyglot.Polyglot(self.path)
 
     def get_list_moves(self, fen):
-        li = self._entries(fen)
+        li = self.book.lista(self.path, fen)
         position = Position.Position()
         position.read_fen(fen)
 
@@ -202,12 +189,13 @@ class Book:
             pc = "%0.02f%%" % (w * 100.0 / total,) if total else ""
             from_sq, to_sq, promotion = pv[:2], pv[2:4], pv[4:]
             pgn = position.pgn_translated(from_sq, to_sq, promotion)
-            lista_jugadas.append([from_sq, to_sq, promotion, "%-5s -%7s -%7d" % (pgn, pc, w),
-                                  1.0 * w / maxim if maxim else 0])
+            lista_jugadas.append(
+                [from_sq, to_sq, promotion, "%-5s -%7s -%7d" % (pgn, pc, w), 1.0 * w / maxim if maxim else 0]
+            )
         return lista_jugadas
 
     def alm_list_moves(self, fen):
-        li = self._entries(fen)
+        li = self.book.lista(self.path, fen)
         position = Position.Position()
         position.read_fen(fen)
 
@@ -234,31 +222,12 @@ class Book:
             alm.weight = w
             lista_jugadas.append(alm)
 
-        # if extended:
-        #     for exmove in position.get_exmoves():
-        #         pv = exmove.move()
-        #         if pv not in st_pvs_included:
-        #             FasterCode.set_fen(fen)
-        #             from_sq, to_sq, promotion = pv[:2], pv[2:4], pv[4:]
-        #             FasterCode.move_pv(from_sq, to_sq, promotion)
-        #             new_fen = FasterCode.get_fen()
-        #             li = self.book.lista(self.path, new_fen)
-        #             if len(li) > 0:
-        #                 alm = Util.Record()
-        #                 alm.from_sq, alm.to_sq, alm.promotion = from_sq, to_sq, promotion
-        #                 alm.pgn = position.pgn_translated(from_sq, to_sq, promotion)
-        #                 alm.pgnRaw = position.pgn(from_sq, to_sq, promotion)
-        #                 alm.fen = fen
-        #                 alm.porc = ""
-        #                 alm.weight = 0
-        #                 listaJugadas.append(alm)
-
         return lista_jugadas
 
     def select_move_type(self, fen, tipo):
         maxim = 0
         li_max = []
-        li = self._entries(fen)
+        li = self.book.lista(self.path, fen)
         nli = len(li)
         if nli == 0:
             return None
@@ -299,28 +268,17 @@ class Book:
 
         return pv.lower()
 
-    # def miraListaPV(self, fen, maximized, onlyone=True):
-    #     li = self.book.lista(self.path, fen)
-    #
-    #     li_resp = []
-    #     if maximized:
-    #         maxim = -1
-    #         for entry in li:
-    #             w = entry.weight
-    #             if w > maxim:
-    #                 maxim = w
-    #                 li_resp = [entry.pv()]
-    #             elif w == maxim and not onlyone:
-    #                 li_resp.append(entry.pv())
-    #     else:
-    #         for entry in li:
-    #             li_resp.append(entry.pv())
-    #
-    #     return li_resp
+    def si_esta(self, fen, move):
+        if lista_jugadas := self.get_list_moves(fen):
+            for apdesde, aphasta, appromotion, nada, nada1 in lista_jugadas:
+                mx = apdesde + aphasta + appromotion
+                if mx.strip().lower() == move:
+                    return True
+        return False
 
 
-class Libro(Book):  # Cambio de denominación, error en restore wplayagainst engine
-    pass
+# class Libro(Book):  # Cambio de denominación, error en restore wplayagainst engine
+#     pass
 
 
 class BookGame(Book):

@@ -2,6 +2,7 @@ import random
 import time
 from typing import Optional
 
+from PySide6 import QtCore
 from PySide6.QtCore import Qt
 
 from Code.Base import Game, Move
@@ -153,7 +154,7 @@ class ManagerOpeningEngines(Manager.Manager):
 
         self.li_info = [
             f"<b>{_('Engine')}</b>: {self.numengine + 1}/{num_engines} - {self.manager_rival.engine.name}",
-            f'<b>{_('Level')}</b>: {self.level + 1}/{num_levels} - {self.mstime_rival / 1000.0:.1f}"',
+            f'<b>{_("Level")}</b>: {self.level + 1}/{num_levels} - {self.mstime_rival / 1000.0:.1f}"',
         ]
 
         self.dict_fenm2 = self.training_engines["DICFENM2"]
@@ -205,7 +206,7 @@ class ManagerOpeningEngines(Manager.Manager):
             if is_rival:
                 self.disable_all()
                 if self.play_rival():
-                    self.play_next_move()
+                    QtCore.QTimer.singleShot(0, self.play_next_move)
             else:
                 self.activate_side(is_white)
                 self.human_is_playing = True
@@ -273,8 +274,7 @@ class ManagerOpeningEngines(Manager.Manager):
                 self.board.create_arrow_multi(move.movimiento(), True)
                 if self.ask_movesdifferent:
                     mensaje = (
-                        f"{_('This is not the move in the opening lines')}\n"
-                        f"{_('Do you want to go on with this move?')}"
+                        f"{_('This is not the move in the opening lines')}\n{_('Do you want to go on with this move?')}"
                     )
                     if not QTMessages.pregunta(self.main_window, mensaje):
                         self.set_end_game_opl()
@@ -287,7 +287,7 @@ class ManagerOpeningEngines(Manager.Manager):
         self.move_the_pieces(move.list_piece_moves)
 
         self.add_move(move, True)
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
         return True
 
     def add_move(self, move, is_player_move):
@@ -412,7 +412,7 @@ class ManagerOpeningEngines(Manager.Manager):
         self.um = None  # controla one_moment_please
 
         def aprobado():
-            menst = f"<b><span style=\"color:green\">{_('Congratulations, goal achieved')}</span></b>"
+            menst = f'<b><span style="color:green">{_("Congratulations, goal achieved")}</span></b>'
             self.li_info.append("")
             self.li_info.append(menst)
             self.show_labels()
@@ -421,7 +421,7 @@ class ManagerOpeningEngines(Manager.Manager):
             self.is_approved = True
 
         def suspendido():
-            menst = f"<b><span style=\"color:red\">{_('You must repeat the game')}</span></b>"
+            menst = f'<b><span style="color:red">{_("You must repeat the game")}</span></b>'
             self.li_info.append("")
             self.li_info.append(menst)
             self.show_labels()
@@ -474,7 +474,7 @@ class ManagerOpeningEngines(Manager.Manager):
         def append_info(label, puntos, mate):
             menst = f"{template % (label, puntos)}"
             if mate:
-                menst += f' {_("Mate")} {mate}'
+                menst += f" {_('Mate')} {mate}"
             self.li_info.append(menst)
 
         append_info(_("Begin"), puntos_inicio, mate_inicio)
@@ -483,8 +483,8 @@ class ManagerOpeningEngines(Manager.Manager):
         ok = perdidos < self.lost_points
         if mate_inicio or mate_final:
             ok = mate_final > mate_inicio
-        mens = template % ('(%d)-(%d)' % (puntos_inicio, puntos_final), perdidos)
-        mens = f"{mens} %s %d" % ('&lt;' if ok else '&gt;', self.lost_points)
+        mens = template % ("(%d)-(%d)" % (puntos_inicio, puntos_final), perdidos)
+        mens = f"{mens} %s %d" % ("&lt;" if ok else "&gt;", self.lost_points)
         self.li_info.append(mens)
 
         if not ok:

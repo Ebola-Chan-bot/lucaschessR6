@@ -424,7 +424,7 @@ class Tactic:
             t -= self.puzzles
             n = 0
             while t:
-                lif[0][n] += 1
+                lif[n][0] += 1
                 t -= 1
                 n += 1
                 if n == len(lif):
@@ -760,9 +760,9 @@ class Tactic:
             '<table border="1" with="100%%" align="center" cellpadding="5" cellspacing="0">'
             f"{title}"
             '<tr><td  align="center">'
-            f'<h4>{str_current}: {self.w_current_position + 1}/{self.w_total_positions}'
+            f"<h4>{str_current}: {self.w_current_position + 1}/{self.w_total_positions}"
             f'<br><font color="{color}">{str_final}</font></h4>'
-            '</td></tr>'
+            "</td></tr>"
             "</table>"
         )
         return html

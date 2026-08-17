@@ -4,11 +4,20 @@ from PySide6 import QtCore
 
 import Code
 from Code.Base.Constantes import (
-    GO_BACK, GO_FORWARD,
-    MENU_PLAY_ANY_ENGINE, MENU_PLAY_BOTH, MENU_PLAY_YOUNG_PLAYERS,
-    NOTATION_ALGEBRAIC, NOTATION_LONGALGEBRAIC, NOTATION_DESCRIPTIVE,
-    HIGHLIGHT_STYLE_ARROW, HIGHLIGHT_STYLE_OUTLINE, HIGHLIGHT_STYLE_FILL, HIGHLIGHT_STYLE_NONE
+    GO_BACK,
+    GO_FORWARD,
+    MENU_PLAY_ANY_ENGINE,
+    MENU_PLAY_BOTH,
+    MENU_PLAY_YOUNG_PLAYERS,
+    NOTATION_ALGEBRAIC,
+    NOTATION_LONGALGEBRAIC,
+    NOTATION_DESCRIPTIVE,
+    HIGHLIGHT_STYLE_ARROW,
+    HIGHLIGHT_STYLE_OUTLINE,
+    HIGHLIGHT_STYLE_FILL,
+    HIGHLIGHT_STYLE_NONE, HIGHLIGHT_STYLE_ARROW_CURVED,
 )
+from Code.Competitions import ManagerMaia
 from Code.QT import FormLayout, Iconos, IconosBase, QTMessages
 from Code.Z import Util
 
@@ -83,23 +92,30 @@ def options(parent, configuration):
 
     # Boards #########################################################################################################
     form.separador()
-    form.checkbox(_("Visual effects"), configuration.x_show_effects)
 
-    drap = {1: 100, 2: 125, 3: 150, 4: 175, 5: 200, 6: 225, 7: 250, 8: 275, 9: 300}
-    drap_v = {}
-    for x in drap:
-        drap_v[drap[x]] = x
-    form.slider(
-        f"{_('Speed')} ({_('By default')}=1)",
-        1,
-        len(drap),
-        drap_v.get(configuration.x_pieces_speed, 100),
-        siporc=False,
+    li_combo_speed = (
+        (_("None"), 0),
+        (_("Very fast"), 300),
+        (_("Fast"), 200),
+        (_("Normal"), 100),
+        (_("Slow"), 75),
+        (_("Very slow"), 50),
     )
+    value = configuration.x_pieces_speed if configuration.x_show_effects else 0
+    form.combobox(_("Speed at which pieces move"), li_combo_speed, value)
+
+    str_move = configuration.x_pieces_move
+    li_combo_type = (
+        (_("Smooth"), "InOutQuad"),
+        (_("Constant speed"), "Linear"),
+        # (_("Soft curve"), "InOutCubic"),
+        # (_("Natural wave"), "InOutSine")
+    )
+    form.combobox(_("Move type"), li_combo_type, str_move)
     form.separador()
 
     form.slider(
-        f'{_("Margin of pieces in square")}:<br><small>{_("By default")} 10</small>',
+        f"{_('Margin of pieces in square')}:<br><small>{_('By default')}=10</small>",
         0,
         20,
         Code.configuration.x_margin_pieces,
@@ -116,6 +132,7 @@ def options(parent, configuration):
     )
     li_hstyle = (
         (_("Arrow"), HIGHLIGHT_STYLE_ARROW),
+        (_("Arrow curved in the case of knight moves"), HIGHLIGHT_STYLE_ARROW_CURVED),
         (_("Square Outline"), HIGHLIGHT_STYLE_OUTLINE),
         (_("Square Fill"), HIGHLIGHT_STYLE_FILL),
         (_("None"), HIGHLIGHT_STYLE_NONE),
@@ -131,7 +148,7 @@ def options(parent, configuration):
     form.combobox(_("Configuration icon position"), li_pos, configuration.x_position_tool_board)
     form.separador()
 
-    form.add_tab(f'{_("Boards")} 1')
+    form.add_tab(f"{_('Boards')} 1")
 
     # Boards 2/2 ######################################################################################################
     form.separador()
@@ -159,6 +176,15 @@ def options(parent, configuration):
         (_("Predictive type: program tries to guess your intention"), True),
     ]
     form.combobox(_("Mouse shortcuts"), li_mouse_sh, configuration.x_mouse_shortcuts)
+    form.slider(
+        f"{_("Show square pressed")}:<br><small>{_('By default')}=50%",
+        0,
+        100,
+        Code.configuration.x_show_square_shortcut,
+        siporc=True,
+        interval=10,
+        step=5
+    )
     form.separador()
 
     x = f" - {_('developed by')} Graham O'Neill (https://goneill.co.nz)"
@@ -181,6 +207,8 @@ def options(parent, configuration):
     ]
     if Util.is_windows():
         li_db.insert(5, (_("DGT"), "DGT"))
+        li_db.insert(10, (_("Manya Cynus") + x, "Cynus"))
+
     form.combobox(_("Digital board"), li_db, configuration.x_digital_board)
     form.separador()
 
@@ -194,7 +222,7 @@ def options(parent, configuration):
 
     form.checkbox(_("Live graphics with the right mouse button"), configuration.x_direct_graphics)
 
-    form.add_tab(f'{_("Boards")} 2')
+    form.add_tab(f"{_('Boards')} 2")
 
     # Appearance 1/2 #################################################################################################
     form.checkbox(_("By default"), False)
@@ -245,7 +273,7 @@ def options(parent, configuration):
     form.checkbox(_("PGN always in English"), configuration.x_pgn_english)
     form.checkbox(_("PGN with figurines"), configuration.x_pgn_withfigurines)
     li_notations = (
-        (f'{_("Algebraic")} ({_("By default")})', NOTATION_ALGEBRAIC),
+        (f"{_('Algebraic')} ({_('By default')})", NOTATION_ALGEBRAIC),
         (_("Long algebraic"), NOTATION_LONGALGEBRAIC),
         (_("Descriptive"), NOTATION_DESCRIPTIVE),
     )
@@ -287,6 +315,13 @@ def options(parent, configuration):
     form.spinbox(_("Fide-Elo"), 0, 3200, sb_width_100, configuration.x_fide)
     form.separador()
     form.spinbox(_("Lichess-Elo"), 0, 3200, sb_width_100, configuration.x_lichess)
+    form.separador()
+
+    maia_state = ManagerMaia.MaiaState()
+    li = []
+    for x in (1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2200):
+        li.append((str(x), x))
+    form.combobox(_("Maia Ladder"), li, maia_state.current_elo())
 
     form.add_tab(_("Change elos"))
 
@@ -315,8 +350,8 @@ def options(parent, configuration):
 
         # Board 1 ###################################################################################################
         (
-            configuration.x_show_effects,
-            rapidezMovPiezas,
+            configuration.x_pieces_speed,
+            configuration.x_pieces_move,
             configuration.x_margin_pieces,
             configuration.x_shadows_board,
             configuration.x_cursor_thinking,
@@ -325,10 +360,10 @@ def options(parent, configuration):
             configuration.x_move_highlight_style,
             configuration.x_show_candidates,
             toolIcon,
-            configuration.x_position_tool_board
+            configuration.x_position_tool_board,
         ) = li_b1
         configuration.x_opacity_tool_board = 10 if toolIcon else 1
-        configuration.x_pieces_speed = drap[rapidezMovPiezas]
+        configuration.x_show_effects = configuration.x_pieces_speed > 0
 
         # Board 2 ###################################################################################################
 
@@ -337,6 +372,7 @@ def options(parent, configuration):
             configuration.x_wheel_board,
             configuration.x_autopromotion_q,
             configuration.x_mouse_shortcuts,
+            configuration.x_show_square_shortcut,
             dboard,
             configuration.x_director_icon,
             configuration.x_direct_graphics,
@@ -360,11 +396,11 @@ def options(parent, configuration):
                             parent,
                             "%s<br><br>%s %s<br><br>%s<br>%s"
                             % (
-                                    _("Are you sure %s is the correct driver ?") % dboard,
-                                    _("WARNING: selecting the wrong driver might cause damage to your board."),
-                                    _("Proceed at your own risk."),
-                                    _("Please read the driver's user manual at:"),
-                                    '<a href="https://goneill.co.nz/chess#eboard">https://goneill.co.nz/chess#eboard</a>',
+                                _("Are you sure %s is the correct driver ?") % dboard,
+                                _("WARNING: selecting the wrong driver might cause damage to your board."),
+                                _("Proceed at your own risk."),
+                                _("Please read the driver's user manual at:"),
+                                '<a href="https://goneill.co.nz/chess#eboard">https://goneill.co.nz/chess#eboard</a>',
                             ),
                     ):
                         dboard = ""
@@ -444,7 +480,11 @@ def options(parent, configuration):
             configuration.x_fics,
             configuration.x_fide,
             configuration.x_lichess,
+            new_maia_elo
         ) = li_nc
+
+        if new_maia_elo != maia_state.current_elo():
+            maia_state.set_current_elo(new_maia_elo)
 
         return True
     else:

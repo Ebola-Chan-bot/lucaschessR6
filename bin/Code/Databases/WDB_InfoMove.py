@@ -74,9 +74,6 @@ class WInfomove(QtWidgets.QWidget):
 
         self.lbPGN = LBKey(self).relative_width(self.board.ancho).set_wrap()
         self.lbPGN.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
-        # self.lbPGN.setTextInteractionFlags(
-        #     Qt.TextInteractionFlag.LinksAccessibleByMouse | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
-        # )
         self.lbPGN.wowner = self
         self.lbPGN.set_font_type(puntos=configuration.x_pgn_fontpoints)
         Code.configuration.set_property(self.lbPGN, "pgn")
@@ -102,7 +99,8 @@ class WInfomove(QtWidgets.QWidget):
         self.with_figurines = configuration.x_pgn_withfigurines
 
         self.lb_opening = Controles.LB(self).align_center().relative_width(self.board.ancho).set_wrap()
-        self.lb_opening.set_font_type(puntos=10, peso=200)
+        font = Controles.FontTypeNew(point_size_delta=-1, bold=True)
+        self.lb_opening.set_font(font)
         ly_o = Colocacion.H().relleno().control(self.lb_opening).relleno()
 
         lya = Colocacion.H().relleno().control(scroll).relleno()
@@ -131,8 +129,8 @@ class WInfomove(QtWidgets.QWidget):
         self.game = game
         if game.opening:
             txt = game.opening.tr_name
-            if game.pending_opening:
-                txt += " ..."
+            # if game.pending_opening:
+            #     txt += " ..."
             self.lb_opening.set_text(txt)
         else:
             self.lb_opening.set_text("")
@@ -158,9 +156,9 @@ class WInfomove(QtWidgets.QWidget):
 
         movenum = p.first_num_move()
         li_pgn = []
-        style_number = f'color:{Code.dic_colors["PGN_NUMBER"]}'
-        style_select = f'color:{Code.dic_colors["PGN_SELECT"]};font-weight:bold;'
-        style_moves = f'color:{Code.dic_colors["PGN_MOVES"]}'
+        style_number = f"color:{Code.dic_colors['PGN_NUMBER']}"
+        style_select = f"color:{Code.dic_colors['PGN_SELECT']};font-weight:bold;"
+        style_moves = f"color:{Code.dic_colors['PGN_MOVES']}"
         if p.starts_with_black:
             li_pgn.append(f'<span style="{style_number}">{movenum}...</span>')
             movenum += 1
@@ -231,9 +229,7 @@ class WInfomove(QtWidgets.QWidget):
         move = self.game.move(self.pos_move)
         xanalyzer = Code.procesador.get_manager_analyzer()
         with QTMessages.WaitingMessage(self, _("Analyzing the move....")):
-            move.analysis = xanalyzer.analyzes_move_game(
-                move.game, self.pos_move, xanalyzer.mstime_engine, xanalyzer.depth_engine
-            )
+            move.analysis = xanalyzer.analyze_move(move.game, self.pos_move, None)
         Analysis.show_analysis(
             xanalyzer,
             move,

@@ -272,7 +272,7 @@ class WFiltrar(QtWidgets.QDialog):
                 if "%" not in valor:
                     valor = f"%{valor}%"
                 if condicion == "NOT LIKE":
-                    par0 = par1 = True   # para que "OR CAMPO is NULL" esté unido al resto con paréntesis
+                    par0 = par1 = True  # para que "OR CAMPO is NULL" esté unido al resto con paréntesis
 
             if union:
                 where += f" {union} "
@@ -462,7 +462,6 @@ def create_tactics(wowner, li_registros_selected, li_registros_total, rutina_dat
     t = time.time()
 
     for n in range(nregs):
-
         if tmp_bp.is_canceled():
             break
 
@@ -643,7 +642,6 @@ def create_training_positions(wowner, li_registros_selected, li_registros_total,
     ok = True
 
     for n in range(nregs):
-
         if tmp_bp.is_canceled():
             ok = False
             break
@@ -719,5 +717,5 @@ def create_training_positions(wowner, li_registros_selected, li_registros_total,
     tmp_bp.cerrar()
 
     if ok:
-        message = f'{_("Tactics")}\n  {_("Training positions")}\n    {_("Personal Training")}\n      {nom_menu}\n'
+        message = f"{_('Tactics')}\n  {_('Training positions')}\n    {_('Personal Training')}\n      {nom_menu}\n"
         QTMessages.message_bold(wowner, f"{_('Created')}:\n\n{message}")

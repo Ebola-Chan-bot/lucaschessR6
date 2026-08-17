@@ -120,6 +120,7 @@ class EtiquetaPGN(QtWidgets.QStyledItemDelegate):
         self.si_alineacion = si_alineacion
         self.si_fondo = si_fondo
         self.si_indicador_inicial = si_indicador_inicial
+        self.ancho = 0
         QtWidgets.QStyledItemDelegate.__init__(self, None)
 
     def set_side_of_figurines(self, is_white):
@@ -133,11 +134,13 @@ class EtiquetaPGN(QtWidgets.QStyledItemDelegate):
     def paint(self, painter, option, index):
         data = index.model().data(index, QtCore.Qt.ItemDataRole.DisplayRole)
         if isinstance(data, tuple):
-            pgn, color, txt_analysis, indicador_inicial, li_nags = data
-            if li_nags:
+            pgn, color, txt_analysis, indicador_inicial, st_nags = data
+            if st_nags:
                 li = []
                 st = set()
-                for x in li_nags:
+                dolar = 0
+                # first_symbol = True
+                for x in st_nags:
                     x = str(x)
                     if x in st:
                         continue
@@ -148,10 +151,12 @@ class EtiquetaPGN(QtWidgets.QStyledItemDelegate):
                         if symbol:
                             li.append(symbol)
                         else:
-                            li.append(f'${x}')
-                li_nags = li
+                            dolar += 1
+                if dolar:
+                    li.append("$" if dolar == 1 else "$*")
+                st_nags = li
         else:
-            pgn, color, txt_analysis, indicador_inicial, li_nags = (
+            pgn, color, txt_analysis, indicador_inicial, st_nags = (
                 data,
                 None,
                 None,
@@ -180,10 +185,10 @@ class EtiquetaPGN(QtWidgets.QStyledItemDelegate):
                 pgn = pgn[:-2]
                 salto_fin_pz = -6
 
-        if li_nags:
+        if st_nags:
             if post_pz is None:
                 post_pz = ""
-            post_pz += f" {' '.join(li_nags)}"
+            post_pz += f" {' '.join(st_nags)}"
 
         rect = option.rect
         w_total = rect.width()
@@ -285,8 +290,6 @@ class EtiquetaPGN(QtWidgets.QStyledItemDelegate):
         if txt_analysis:
             document_analysis = QtGui.QTextDocument()
             font = option.font
-            # new_size = max(6, font.pointSize() - 1)  # aseguramos que no baje de 6
-            # font.setPointSize(new_size)
             document_analysis.setDefaultFont(font)
             if color:
                 txt_analysis = f'<font color="{color}">{txt_analysis}</font>'
@@ -296,6 +299,14 @@ class EtiquetaPGN(QtWidgets.QStyledItemDelegate):
             painter.translate(x_total + (w_total - w_analysis) + 2, y)
             document_analysis.drawContents(painter)
             painter.restore()
+            x += w_analysis + 2
+
+        self.ancho = x
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        ancho_final = size.width() if self.ancho == 0 else self.ancho
+        return QtCore.QSize(ancho_final, size.height())
 
 
 class PmIconosBMT(QtWidgets.QStyledItemDelegate):
@@ -483,7 +494,7 @@ class EtiquetaPOS(QtWidgets.QStyledItemDelegate):
         post_pz = None
         salto_fin_pz = 0
         if self.with_figurines and pgn:
-            if pgn[0] in "QBKRN":
+            if pgn[0] in "QBKRNP":
                 ini_pz = pgn[0] if is_white else pgn[0].lower()
                 pgn = pgn[1:]
             elif pgn[-1] in "QBRN":
@@ -856,4 +867,78 @@ class LinePGN(QtWidgets.QStyledItemDelegate):
         painter.save()
         painter.translate(x, y)
         document_pgn.drawContents(painter, r)
+        painter.restore()
+
+
+class MemoryResultCell(QtWidgets.QStyledItemDelegate):
+    """
+    Delegado para WMemoryResults: muestra el valor principal centrado y el
+    delta (∆ por pieza) en letra pequeña en la esquina inferior derecha.
+    Espera que el modelo devuelva una tupla (main_value: str, delta: str).
+    Si el valor es vacío ("") pinta la celda vacía.
+    """
+
+    def __init__(self, parent=None):
+        QtWidgets.QStyledItemDelegate.__init__(self, parent)
+
+    def paint(self, painter, option, index):
+        data = index.model().data(index, QtCore.Qt.ItemDataRole.DisplayRole)
+
+        # Si el dato no es una tupla (columna level, etc.) pintamos normal
+        if not isinstance(data, tuple):
+            super().paint(painter, option, index)
+            return
+
+        main_value, delta = data
+
+        rect = option.rect
+        x0, y0 = rect.x(), rect.y()
+        w, h = rect.width(), rect.height()
+
+        # Fondo de selección / alternado (delegamos al estilo base antes de pintar)
+        painter.save()
+        if option.state & QtWidgets.QStyle.StateFlag.State_Selected:
+            painter.fillRect(rect, option.palette.highlight())
+        painter.restore()
+
+        if not main_value:
+            return
+
+        painter.save()
+
+        # --- Valor principal centrado ---
+        font_main = QtGui.QFont(option.font)
+        font_main.setBold(True)
+        fm_main = QtGui.QFontMetrics(font_main)
+        text_w = fm_main.horizontalAdvance(main_value)
+        text_h = fm_main.height()
+
+        x_main = x0 + (w - text_w) / 2
+        y_main = y0 + (h - text_h) / 2 + fm_main.ascent() - 6
+
+        painter.setFont(font_main)
+        if option.state & QtWidgets.QStyle.StateFlag.State_Selected:
+            painter.setPen(option.palette.highlightedText().color())
+        else:
+            painter.setPen(option.palette.text().color())
+        painter.drawText(int(x_main), int(y_main), main_value)
+
+        # --- Delta en la esquina inferior derecha ---
+        if delta:
+            font_delta = QtGui.QFont(option.font)
+            delta_pt = max(6, option.font.pointSize() - 1)
+            font_delta.setPointSize(delta_pt)
+            fm_delta = QtGui.QFontMetrics(font_delta)
+            delta_w = fm_delta.horizontalAdvance(delta)
+
+            x_delta = x0 + w - delta_w - 3
+            y_delta = y0 + h - 3
+
+            painter.setFont(font_delta)
+            color = option.palette.text().color() if not (option.state & QtWidgets.QStyle.StateFlag.State_Selected) \
+                else option.palette.highlightedText().color()
+            color.setAlphaF(0.75)
+            painter.setPen(color)
+            painter.drawText(int(x_delta), int(y_delta), delta)
+
         painter.restore()

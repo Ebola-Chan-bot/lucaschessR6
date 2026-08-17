@@ -3,12 +3,12 @@ from typing import Optional
 
 from PySide6 import QtCore
 
-from Code.Z import Util
 from Code.Base import Game, Move, Position
 from Code.Base.Constantes import KIB_BEFORE_MOVE
 from Code.Engines import EngineRun
 from Code.Kibitzers import Kibitzers, WindowKibitzers, WKibCommon
 from Code.QT import Colocacion, Columnas, Controles, Delegados, Grid, Iconos, QTMessages, QTUtils, ScreenUtils
+from Code.Z import Util
 
 
 class WKibEngine(WKibCommon.WKibCommon):
@@ -109,12 +109,14 @@ class WKibEngine(WKibCommon.WKibCommon):
         self.stopped = False
 
     def change_options(self):
+        self.pause()
         w = WindowKibitzers.WKibitzerLive(self, self.cpu.configuration, self.cpu.num_kibitzer)
-        if w.exec() and w.has_changes:
+        if w.exec():
             self.kibitzer = self.cpu.reset_kibitzer()
             self.engine_run.close()
             self.launch_engine()
             self.cpu.reprocesa()
+        self.play()
         self.grid.refresh()
 
     def stop(self):
@@ -203,13 +205,6 @@ class WKibEngine(WKibCommon.WKibCommon):
         rm = mrm.rm_best()
         if rm is None:
             return
-        # Verify best move is legal in current position
-        mov = rm.movimiento()
-        if mov:
-            test_game = Game.Game(first_position=self.game.last_position)
-            test_game.read_pv(mov)
-            if len(test_game) == 0:
-                return
         if self.is_candidates:
             self.li_moves = mrm.li_rm
             if self.kibitzer.pointofview == KIB_BEFORE_MOVE and self.cpu.last_move:
@@ -250,7 +245,7 @@ class WKibEngine(WKibCommon.WKibCommon):
     def launch_engine(self):
         if self.is_candidates:
             num_multipv = self.kibitzer.current_multipv()
-            if num_multipv <= 0:
+            if num_multipv <= 1:
                 num_multipv = min(self.kibitzer.maxMultiPV, 10)
         else:
             num_multipv = 1
@@ -332,6 +327,17 @@ class WKibEngine(WKibCommon.WKibCommon):
         self.grid.refresh()
 
         self.test_tb_home()
+
+    def bad_threats_position(self, position: Position.Position):
+        self.stop()
+
+        def refresh():
+            self.board.set_position(position)
+            self.board.disable_all()
+            self.li_moves = []
+            self.grid.refresh()
+
+        QTUtils.deferred_call(100, refresh)
 
     def pegar(self):
         tp, data = QTUtils.get_clipboard()

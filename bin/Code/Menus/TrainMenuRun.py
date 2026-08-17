@@ -16,7 +16,7 @@ from Code.FindAllMoves import ManagerFindAllMoves
 from Code.GM import ManagerGM, WindowGM
 from Code.Leitner import WLeitner
 from Code.Mate15 import WMate15
-from Code.Memory import Memory
+from Code.Memory import WindowMemoria
 from Code.QT import Iconos, QTMessages
 from Code.Resistance import ManagerResistance, Resistance, WindowResistance
 from Code.Tactics import ManagerTactics, Tactics, WindowTactics
@@ -128,13 +128,10 @@ class TrainMenuRun:
         elif resp == "coordinates_write":
             self.coordinates_write()
 
-        elif resp.startswith("memory"):
-            mem = Memory.Memoria(self.procesador)
-            if resp == "memory_results":
-                mem.show_results()
-            else:
-                cat = int(resp[7:])
-                mem.lanza(cat)
+        elif resp == "memory":
+            w = WindowMemoria.WMemoryMain(self.procesador.main_window)
+            w.exec()
+
         elif resp == "leitner":
             w = WLeitner.WLeitner(self.procesador.main_window)
             if bool(w.exec()):
@@ -214,7 +211,7 @@ class TrainMenuRun:
 
     def resistance(self, tipo):
         resistance = Resistance.Resistance(self.procesador, tipo)
-        resp = WindowResistance.windowResistance(self.parent, resistance)
+        resp = WindowResistance.window_resistance(self.parent, resistance)
         if resp is not None:
             num_engine, key = resp
             self.procesador.manager = ManagerResistance.ManagerResistance(self.procesador)
@@ -237,7 +234,7 @@ class TrainMenuRun:
             li_tam_blocks = (6, 12, 20, 30, 60)
         elif name.startswith("uwe_easy"):
             title = f"{_('Uwe Auerswald')} ({_('Initial')})"
-            TurnOnLights.compruebaUweEasy(Code.configuration, name)
+            TurnOnLights.comprueba_uwe_easy(Code.configuration, name)
             folder = Code.configuration.temporary_folder()
             icono = Iconos.Uwe()
             li_tam_blocks = (4, 6, 9, 12, 18, 36)

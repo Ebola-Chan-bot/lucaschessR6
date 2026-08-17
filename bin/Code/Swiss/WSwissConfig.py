@@ -25,7 +25,6 @@ from Code.Swiss import Swiss
 
 
 class WSwissConfig(LCDialog.LCDialog):
-
     def __init__(self, w_parent, swiss: Swiss.Swiss):
 
         titulo = swiss.name()
@@ -42,7 +41,7 @@ class WSwissConfig(LCDialog.LCDialog):
         color_2 = Code.dic_qcolors["WLEAGUECONFIG_1"]
         self.li_colors = [color_1, color_2]
 
-        self.select_engines = SelectEngines.SelectEngines(w_parent)
+        self.select_engines = SelectEngines.get_select_engines(w_parent)
 
         li_acciones = [
             (_("Save"), Iconos.GrabarFichero(), self.save),
@@ -69,7 +68,7 @@ class WSwissConfig(LCDialog.LCDialog):
         )
         self.grid = Grid.Grid(self, o_columns, complete_row_select=True, is_editable=True)
         self.register_grid(self.grid)
-        self.grid.setMinimumWidth(self.grid.width_columns_displayables() + 20)
+        self.grid.fix_min_width()
 
         self.bt_engines_more = Controles.PB(self, f"++ {_('Engines')}", rutina=self.add_engines, plano=False).set_icono(
             Iconos.Engines()
@@ -445,7 +444,6 @@ class WSwissConfig(LCDialog.LCDialog):
     def external_engines(self):
         w = WExternalEngines.WExternalEngines(self)
         w.exec()
-        self.select_engines.redo_external_engines()
 
     def change_num_opponents(self):
         n_opponents = self.swiss.num_opponents()

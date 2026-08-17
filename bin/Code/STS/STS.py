@@ -2,8 +2,8 @@ import collections
 import os
 
 import Code
-from Code.Z import Util
 from Code.Engines import Engines
+from Code.Z import Util
 
 
 class Elem:
@@ -249,6 +249,14 @@ class Work:
         resoult_group = self.results.resoult_group(ngroup)
         resoult_group.elem(nfen, a1h8)
         self.work_time += ts
+
+    def title(self):
+        if self.seconds:
+            tm = ('%0.3f' % self.seconds).rstrip('0').rstrip('.') + '"'
+        else:
+            tm = ""
+        dp = "^%d" % self.depth if self.depth else ""
+        return f"{self.ref} ({tm}{dp})"
 
 
 class Works:

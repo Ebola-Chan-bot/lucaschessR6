@@ -19,7 +19,7 @@ extensions = [
             os.path.join(BASE_DIR, "source", "irina"),
         ],
         extra_compile_args=[
-            "/O2",        # optimización segura
+            "/O2",
             "/DNDEBUG",
         ],
         language="c",

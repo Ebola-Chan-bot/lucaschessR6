@@ -23,7 +23,9 @@ from Code.Base.Constantes import (
     TB_TAKEBACK,
     VERY_GOOD_MOVE,
     ZVALUE_PIECE,
-    HIGHLIGHT_STYLE_ARROW
+    ZVALUE_PIECE_MOVING,
+    HIGHLIGHT_STYLE_ARROW,
+    HIGHLIGHT_STYLE_ARROW_CURVED,
 )
 from Code.Board import (
     BoardArrows,
@@ -35,6 +37,7 @@ from Code.Board import (
     BoardSVGs,
     BoardTypes,
     LichessCommentParser,
+    SpaceControlLayer,
 )
 from Code.Board.BoardSections import BoardVisualMenu, BoardEboardController, BoardBlindfold
 from Code.Databases import DBgames
@@ -78,7 +81,7 @@ class Board(QtWidgets.QGraphicsView):
     and user interaction (mouse, keyboard).
     """
 
-    pieces_are_active: bool
+    # pieces_are_active: bool
     li_pieces: list
     can_be_rotated: bool
     dic_movables: collections.OrderedDict
@@ -197,6 +200,9 @@ class Board(QtWidgets.QGraphicsView):
         self.current_graphlive = None
         self.dic_graphlive = None
 
+        self.space_number = None
+        self.space_layer = None
+
         self.rutinaDropsPGN = None
 
         self.config_board = config_board
@@ -234,6 +240,23 @@ class Board(QtWidgets.QGraphicsView):
 
         self._selection_sc = None
 
+        self._pieces_are_active = False
+
+        self.setStyleSheet("""QGraphicsView {border: none; background: transparent;}""")
+
+        self.dispatch_changed_position = None
+
+    def set_dispatch_changed_position(self, routine):
+        self.dispatch_changed_position = routine
+
+    @property
+    def pieces_are_active(self):  # getter
+        return self._pieces_are_active
+
+    @pieces_are_active.setter
+    def pieces_are_active(self, value):  # setter
+        self._pieces_are_active = value
+
     def set_analysis_bar(self, analysis_bar: Any):
         self.analysis_bar = analysis_bar
 
@@ -266,14 +289,16 @@ class Board(QtWidgets.QGraphicsView):
             return
 
         if key == Qt.Key.Key_F12:
-            if hasattr(self.main_window, "manager") and \
-                    hasattr(self.main_window.manager.main_window, "pressed_shortcut_f12"):
+            if hasattr(self.main_window, "manager") and hasattr(
+                    self.main_window.manager.main_window, "pressed_shortcut_f12"
+            ):
                 self.main_window.manager.main_window.pressed_shortcut_f12()
             return
 
         if key == Qt.Key.Key_F11:
-            if hasattr(self.main_window, "manager") and \
-                    hasattr(self.main_window.manager.main_window, "pressed_shortcut_f11"):
+            if hasattr(self.main_window, "manager") and hasattr(
+                    self.main_window.manager.main_window, "pressed_shortcut_f11"
+            ):
                 self.main_window.manager.main_window.pressed_shortcut_f11()
             return
 
@@ -284,10 +309,10 @@ class Board(QtWidgets.QGraphicsView):
         okseguir = False
 
         if is_alt or is_ctrl:
-
             if key == Qt.Key.Key_O and is_alt:
-                if hasattr(self.main_window, "manager") and \
-                        hasattr(self.main_window.manager.main_window, "pressed_shortcut_alt_o"):  # LCDialog
+                if hasattr(self.main_window, "manager") and hasattr(
+                        self.main_window.manager.main_window, "pressed_shortcut_alt_o"
+                ):  # LCDialog
                     self.main_window.manager.main_window.pressed_shortcut_alt_o()
                 return
 
@@ -329,11 +354,11 @@ class Board(QtWidgets.QGraphicsView):
                 else:
                     QTMessages.temporary_message(
                         self,
-                        f'{_("Saved")}\n{_("Databases")}: __Selected Positions__',
+                        f"{_('Saved')}\n{_('Databases')}: __Selected Positions__",
                         1.8,
                     )
 
-            elif is_alt and key == Qt.Key.Key_F:
+            elif (is_alt or is_ctrl) and key == Qt.Key.Key_F:
                 self.try_to_rotate_the_board(None)
 
             elif key == Qt.Key.Key_I:
@@ -341,7 +366,7 @@ class Board(QtWidgets.QGraphicsView):
                 QTMessages.temporary_message(self.main_window, _("Board image is in clipboard"), 1.2)
 
             elif key == Qt.Key.Key_J:
-                if path := SelectFiles.salvaFichero(
+                if path := SelectFiles.save_file(
                         self,
                         _("File to save"),
                         self.configuration.save_folder(),
@@ -429,17 +454,8 @@ class Board(QtWidgets.QGraphicsView):
     def sizeHint(self):
         return QtCore.QSize(self.ancho + 6, self.ancho + 6)
 
-    @staticmethod
-    def xremove_item(item):
-        try:
-            scene = item.scene()
-        except RuntimeError:
-            return
-        if scene:
-            try:
-                scene.removeItem(item)
-            except RuntimeError:
-                return
+    def xremove_item(self, item):
+        QTUtils.scene_remove_item_safe(self.escena, item)
 
     def keyPressEvent(self, event):
         k = event.key()
@@ -640,6 +656,9 @@ class Board(QtWidgets.QGraphicsView):
             if si_flecha:
                 self.reset_arrow_sc()
 
+            if self.space_number is not None:
+                self.update_space_control()
+
         else:
             self.redraw()
 
@@ -654,6 +673,7 @@ class Board(QtWidgets.QGraphicsView):
         self.dic_movables = collections.OrderedDict()  # Flechas, Marcos, SVG
         self.id_last_movable = 0
         self.side_indicator_sc = None
+        self.space_layer = None
 
         self.is_white_bottom = True
 
@@ -790,7 +810,6 @@ class Board(QtWidgets.QGraphicsView):
             vx_o = norm(p_frontera.x - ancho_texto - sep)
 
             for x in range(8):
-
                 if self.nCoordenadas > 0:  # 2 o 3 o 4 o 5 o 6
                     d = {  # hS,     vO,     hN,     vE
                         2: (True, True, False, False),
@@ -930,6 +949,8 @@ class Board(QtWidgets.QGraphicsView):
                 self.text = txt
                 self.key = key
                 self.nkey = nkey
+                if not (is_alt or is_ctrl or is_shift) and nkey is None:
+                    self.text += f" ({key})"
 
             def get_shortcut(self):
                 li_alt = []
@@ -989,14 +1010,7 @@ class Board(QtWidgets.QGraphicsView):
         if hasattr(self.main_window, "manager") and hasattr(self.main_window.manager, "save_pgn_clipboard"):
             xis_ctrl = Code.configuration.x_copy_ctrl
             xis_alt = not xis_ctrl
-            add_key(
-                "C",
-                _("Copy PGN to clipboard"),
-                is_alt=xis_alt,
-                is_ctrl=xis_ctrl,
-                is_shift=True,
-                nkey=Qt.Key.Key_C
-            )
+            add_key("C", _("Copy PGN to clipboard"), is_alt=xis_alt, is_ctrl=xis_ctrl, is_shift=True, nkey=Qt.Key.Key_C)
         close_group()
 
         alt("I", _("Copy board as image to clipboard"), nkey=Qt.Key.Key_I)
@@ -1006,7 +1020,7 @@ class Board(QtWidgets.QGraphicsView):
             f"{_('Copy board as image to clipboard')} ({_('without coordinates')})",
             is_ctrl=True,
             is_alt=True,
-            nkey=Qt.Key.Key_I
+            nkey=Qt.Key.Key_I,
         )
         alt("J", _("Copy board as image to a file"), nkey=Qt.Key.Key_J)
         ctrl("J", f"{_('Copy board as image to a file')} ({_('without border')})", nkey=Qt.Key.Key_J)
@@ -1015,15 +1029,15 @@ class Board(QtWidgets.QGraphicsView):
             f"{_('Copy board as image to a file')} ({_('without coordinates')})",
             is_ctrl=True,
             is_alt=True,
-            nkey=Qt.Key.Key_J
+            nkey=Qt.Key.Key_J,
         )
         close_group()
 
-        alt("Y", f'{_("Blindfold chess")}: {_("Enable")}/{_("Disable")}', nkey=Qt.Key.Key_Y)
-        ctrl("Y", f'{_("Blindfold chess")}: {_("Configuration")}', nkey=Qt.Key.Key_Y)
+        alt("Y", f"{_('Blindfold chess')}: {_('Enable')}/{_('Disable')}", nkey=Qt.Key.Key_Y)
+        ctrl("Y", f"{_('Blindfold chess')}: {_('Configuration')}", nkey=Qt.Key.Key_Y)
         close_group()
 
-        alt("L", _("Open position in lichess"), nkey=Qt.Key.Key_L)
+        alt("L", _("Open position in LiChess"), nkey=Qt.Key.Key_L)
         alt("T", _("Open position in ChessTempo"), nkey=Qt.Key.Key_T)
         alt("X", _("Play current position"), nkey=Qt.Key.Key_X)
         close_group()
@@ -1478,44 +1492,21 @@ class Board(QtWidgets.QGraphicsView):
             return
         self.check_leds()
 
-        dic_pos_cuadro = {"C": 0, "P+": 1, "Px": 1, "P#": 1, "R+": 2, "R#": 2, "Rx": 3}
+        dic_pos_cuadro = {"C": 4, "P+": 0, "Px": 1, "P#": 2, "R+": 1, "R#": 2, "Rx": 3}
         self.remove_pendings()
         self.pendingRelease = []
         for a1, tp in li_c:
-            reg_svg = BoardTypes.SVG()
-            reg_svg.a1h8 = a1 + a1
-            reg_svg.xml = self.dicXML[tp]
-            reg_svg.siMovible = False
-            reg_svg.posCuadro = dic_pos_cuadro[tp]
-            reg_svg.width_square = self.width_square
-            svg = BoardSVGs.SVGCandidate(self.escena, reg_svg, False)
-            self.pendingRelease.append(svg)
+            reg_marker = BoardTypes.Marker()
+            reg_marker.a1h8 = a1 + a1
+            reg_marker.opacity = 0.8
+            reg_marker.xml = self.dicXML[tp]
+            reg_marker.siMovible = False
+            reg_marker.poscelda = dic_pos_cuadro[tp]
+            marker = self.create_marker(reg_marker)
+            marker.setZValue(120)
+            self.pendingRelease.append(marker)
         self.escena.update()
 
-    def show_selection(self, a1h8):
-        self.hide_selection()
-        df, dc, _, _ = self.a1h8_fc(a1h8 + a1h8)
-        origin = self.margin_center + self.tamFrontera // 2
-
-        box = BoardTypes.Caja()
-        box.tipo = 1
-        box.color = "#d7b400"
-        box.colorRelleno = "#fff176"
-        box.grosor = max(2, self.width_square // 18)
-        box.physical_pos.x = origin + self.width_square * (dc - 1)
-        box.physical_pos.y = origin + self.width_square * (df - 1)
-        box.physical_pos.ancho = self.width_square
-        box.physical_pos.alto = self.width_square
-        box.physical_pos.orden = 9
-
-        rect = BoardElements.CajaSC(self.escena, box)
-        rect.setOpacity(0.45)
-        self._selection_sc = rect
-
-    def hide_selection(self):
-        if self._selection_sc is not None:
-            self.escena.removeItem(self._selection_sc)
-            self._selection_sc = None
 
     def mouseDoubleClickEvent(self, event):
         if item := self.itemAt(event.pos()):
@@ -1546,6 +1537,11 @@ class Board(QtWidgets.QGraphicsView):
         if atajos_raton:
             self.atajos_raton = atajos_raton
         self.init_kb_buffer()
+
+    def set_dispatch_move(self, rutina):
+        for pieza, pieza_sc, is_active in self.li_pieces:
+            if is_active:
+                pieza_sc.set_dispatch_move(rutina)
 
     def dbvisual_set_file(self, file):
         self.dbVisual.set_file(file)
@@ -1613,6 +1609,10 @@ class Board(QtWidgets.QGraphicsView):
                         self.launch_guion()
                 elif self.show_graphic_icon:
                     self.scriptSC_menu.hide()
+        self.update_space_control()
+
+        if self.dispatch_changed_position is not None:
+            self.dispatch_changed_position()
 
     def set_raw_last_position(self, position):
         if position != self.last_position:
@@ -1620,7 +1620,6 @@ class Board(QtWidgets.QGraphicsView):
 
     def set_position(self, position, remove_movables_now=True, variation_history=None):
         self.active_premove = False
-        self.hide_selection()
         if self.dirvisual:
             self.dirvisual.changed_position_before()
         elif self.dbVisual.save_always():
@@ -1655,10 +1654,89 @@ class Board(QtWidgets.QGraphicsView):
             y = self.fila2punto(row)
             pieza_sc.setPos(x, y)
 
+    def animate_move(self, li_moves, rapidez=1.0, active_animations_out=None):
+        """Anima el desplazamiento visual de piezas mediante QVariantAnimation.
+
+        :param li_moves: lista de tuplas ("m", from_sq, to_sq) | ("b", sq) | ("c", sq, nueva).
+                         Solo las entradas "m" se animan; "b" y "c" son ignoradas aquí.
+        :param rapidez: factor de velocidad (mayor = más rápido).
+                        1.0 = velocidad del rival, 3.0 = velocidad rápida para navegación.
+                        Se combina con la preferencia global pieces_speed_porc().
+        :param active_animations_out: si se pasa una lista, las animaciones iniciadas se
+                                      añaden a ella para que el caller pueda detenerlas
+                                      externamente (usada por Replay).
+        :return: True si se inició al menos una animación, False en caso contrario.
+        """
+        rapidez_conf = Code.configuration.pieces_speed_porc()
+        if not rapidez_conf:
+            rapidez_conf = 1.0
+        rp = max(rapidez, 0.01)
+
+        secs = None
+        animations = []
+
+        for movim in li_moves:
+            if movim[0] == "m":
+                from_sq, to_sq = movim[1], movim[2]
+                if secs is None:
+                    dc = ord(from_sq[0]) - ord(to_sq[0])
+                    df = int(from_sq[1]) - int(to_sq[1])
+                    dist = (dc ** 2 + df ** 2) ** 0.5
+                    secs = max(0.25, 4.0 * dist / (9.9 * rp * rapidez_conf))
+
+                pieza_sc = self.get_piece_at(from_sq)
+                if pieza_sc is None:
+                    continue
+                pieza_sc.setZValue(ZVALUE_PIECE_MOVING)
+
+                start_pos = pieza_sc.pos()
+                end_x = self.columna2punto(ord(to_sq[0]) - 96)
+                end_y = self.fila2punto(int(to_sq[1]))
+
+                animation = QtCore.QVariantAnimation(self.main_window)
+                animation.setDuration(int(secs * 1000))
+                animation.setStartValue(start_pos)
+                animation.setEndValue(QtCore.QPointF(end_x, end_y))
+                animation.setEasingCurve(Code.configuration.pieces_move_qtype())
+                animation.valueChanged.connect(lambda value, p=pieza_sc: p.setPos(value))
+
+                def restore_z(p=pieza_sc):
+                    p.setZValue(ZVALUE_PIECE)
+
+                animation.finished.connect(restore_z)
+                animations.append(animation)
+
+        if animations:
+            loop = QtCore.QEventLoop()
+            remaining = len(animations)
+
+            def on_finished():
+                nonlocal remaining
+                remaining -= 1
+                if remaining <= 0:
+                    loop.quit()
+
+            if active_animations_out is not None:
+                active_animations_out.extend(animations)
+
+            for animation in animations:
+                animation.finished.connect(on_finished)
+                animation.start()
+
+            loop.exec()
+
+            if active_animations_out is not None:
+                for a in animations:
+                    try:
+                        active_animations_out.remove(a)
+                    except ValueError:
+                        pass
+
+        return bool(animations)
+
     def set_base_position(self, position, variation_history=None):
         self.variation_history = variation_history
 
-        self.pieces_are_active = False
         self.remove_pieces()
 
         squares = position.squares
@@ -1755,6 +1833,12 @@ class Board(QtWidgets.QGraphicsView):
         npieza = self.get_num_piece_at(pos_a1)
         if npieza >= 0:
             return self.li_pieces[npieza][1]
+        return None
+
+    def get_name_piece_at(self, pos_a1):
+        npieza = self.get_num_piece_at(pos_a1)
+        if npieza >= 0:
+            return self.li_pieces[npieza][0]
         return None
 
     def move_piece(self, from_a1h8, to_a1h8):
@@ -1950,7 +2034,7 @@ class Board(QtWidgets.QGraphicsView):
 
         bf.tamFrontera = self.tamFrontera
 
-        if self.configuration.x_move_highlight_style == HIGHLIGHT_STYLE_ARROW:
+        if self.configuration.x_move_highlight_style in (HIGHLIGHT_STYLE_ARROW, HIGHLIGHT_STYLE_ARROW_CURVED):
             return BoardArrows.ArrowSC(self.escena, bf, self.pressed_arrow_sc)
         else:
             return BoardDoubleBoxes.DoubleBoxesSC(self.escena, bf, self.pressed_arrow_sc)
@@ -2157,8 +2241,30 @@ class Board(QtWidgets.QGraphicsView):
             # si es derecho lo dejamos para el menu visual, y el izquierdo solo muestra capturas,
             # si se quieren ver movimientos, que active show candidates
             return
+        number = int(number)
         if self.do_pressed_number:
-            self.do_pressed_number(activate, int(number))
+            self.do_pressed_number(activate, number)
+
+        if number in [2, 3, 6, 7]:
+            if not activate:
+                return
+            if self.space_number == number:
+                self.deactivate_space_control()
+            else:
+                self.space_number = number
+                self.update_space_control()
+
+    def update_space_control(self):
+        if self.space_number is None or self.last_position is None:
+            return
+        if self.space_layer is None:
+            self.space_layer = SpaceControlLayer.SpaceControlLayer(self)
+        self.space_layer.update(self.last_position.fen(), self.space_number)
+
+    def deactivate_space_control(self):
+        self.space_number = None
+        if self.space_layer:
+            self.space_layer.hide()
 
     def pressed_letter(self, is_left, activate, letter):
         if not is_left:
@@ -2178,7 +2284,7 @@ class Board(QtWidgets.QGraphicsView):
             self.scriptSC_menu.hide()
 
         if is_alt and not is_ctrl:
-            pm = QtWidgets.QWidget.grab(self)
+            pixmap = QtWidgets.QWidget.grab(self)
         else:
             x = 0
             y = 0
@@ -2195,11 +2301,11 @@ class Board(QtWidgets.QGraphicsView):
                 w -= self.margin_center * 2 + self.tamFrontera * 2
                 h -= self.margin_center * 2 + self.tamFrontera * 2
             r = QtCore.QRect(x, y, w, h)
-            pm = QtWidgets.QWidget.grab(self, r)
+            pixmap = QtWidgets.QWidget.grab(self, r)
         if file is None:
-            QTUtils.set_clipboard(pm, tipo="p")
+            QTUtils.set_clipboard(pixmap, tipo="p")
         else:
-            pm.save(file, tipo)
+            pixmap.save(file, tipo)
 
         if act_ind:
             self.indicadorSC_menu.show()
@@ -2296,9 +2402,9 @@ class Board(QtWidgets.QGraphicsView):
                 Code.dic_markers[100] = f.read()
         xcolor = Nags.nag_color(color)
         dic = {
-            'xml': Code.dic_markers[100].replace("#222222", xcolor),
-            'name': 'eval_color',
-            'ordenVista': 4,
+            "xml": Code.dic_markers[100].replace("#222222", xcolor),
+            "name": "eval_color",
+            "ordenVista": 4,
         }
         reg_svg = BoardTypes.SVG(dic=dic)
         reg_svg.a1h8 = a1h8 + a1h8
@@ -2324,9 +2430,9 @@ class Board(QtWidgets.QGraphicsView):
             with open(Code.path_resource("IntFiles", "Svg", f"eval_{dicm[color]}.svg"), "rt") as f:
                 Code.dic_markers[color] = f.read()
         dic = {
-            'xml': Code.dic_markers[color],
-            'name': f'eval_{color}',
-            'ordenVista': 24,
+            "xml": Code.dic_markers[color],
+            "name": f"eval_{color}",
+            "ordenVista": 24,
         }
         reg_svg = BoardTypes.Marker(dic=dic)
         reg_svg.physical_pos.orden = 25
@@ -2369,6 +2475,9 @@ class Board(QtWidgets.QGraphicsView):
 
         if hasattr(self.main_window, "capturas"):
             self.main_window.capturas.ponLayout(self.is_white_bottom)
+
+        if self.space_layer:
+            self.space_layer.reposition()
 
     def register_movable(self, bloque_sc):
         self.id_last_movable += 1
@@ -2492,6 +2601,9 @@ class Board(QtWidgets.QGraphicsView):
     def finalize(self):
         if self.dirvisual:
             self.dirvisual.finalize()
+        if self.dbVisual:
+            self.dbVisual.close()
+            self.dbVisual = None
 
     def allow_takeback(self):
         return (
@@ -2580,7 +2692,7 @@ class Board(QtWidgets.QGraphicsView):
 
     def show_selection(self, a1h8):
         self.hide_selection()
-        if self.atajos_raton is None:
+        if self.atajos_raton is None or self.configuration.x_show_square_shortcut == 0:
             return
         df, dc, __, __ = self.a1h8_fc(a1h8 + a1h8)
         origin = self.margin_center + self.tamFrontera // 2
@@ -2597,12 +2709,12 @@ class Board(QtWidgets.QGraphicsView):
         box.physical_pos.orden = 9
 
         rect = BoardElements.CajaSC(self.escena, box)
-        rect.setOpacity(0.45)
+        rect.setOpacity(self.configuration.x_show_square_shortcut / 100)
         self._selection_sc = rect
 
     def hide_selection(self):
         if self._selection_sc is not None:
-            self.escena.removeItem(self._selection_sc)
+            self.xremove_item(self._selection_sc)
             self._selection_sc = None
 
     # -----------------------------------------------------------------------------------------------------  VISUALMENU

@@ -11,11 +11,6 @@ import warnings
 
 warnings.simplefilter("ignore")
 
-if __debug__:
-    import faulthandler
-
-    faulthandler.enable()
-
 n_args = len(sys.argv)
 if n_args == 1:
     import Code.Main.Init
@@ -36,6 +31,7 @@ elif n_args >= 2:
 
     elif arg == "-translate":
         from Code.Translations import RunTranslate
+
         RunTranslate.run_wtranslation(sys.argv[2])
 
     elif arg == "-tournament":

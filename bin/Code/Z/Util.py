@@ -3,9 +3,9 @@ import collections
 import datetime
 import glob
 import hashlib
+import math
 import os
 import pickle
-import queue
 import random
 import shutil
 import stat
@@ -34,6 +34,7 @@ class Log:
     def write(self, buf: str) -> None:
         if buf.startswith("Traceback"):
             import Code
+
             buf = f"{Code.VERSION}-{today()}\n{buf}"
         with self.logname.open("at", encoding="utf-8") as ferr:
             ferr.write(buf)
@@ -65,6 +66,29 @@ def remove_folder_files(folder: Union[str, Path]) -> bool:
     return not folder_path.is_dir()
 
 
+def remove_folder_if_no_subfolders(folder: Union[str, Path]) -> bool:
+    folder_path = Path(folder)
+    try:
+        if not folder_path.exists():
+            return False
+
+        # Verificar si tiene alguna subcarpeta
+        has_subfolders = any(item.is_dir() for item in folder_path.iterdir())
+
+        if not has_subfolders:
+            # Eliminar todos los archivos dentro
+            for item in folder_path.iterdir():
+                if item.is_file():
+                    item.unlink()
+            # Eliminar la carpeta vacía
+            folder_path.rmdir()
+            return True
+
+        return False
+    except Exception:
+        return False
+
+
 def is_linux() -> bool:
     return sys.platform.startswith("linux")
 
@@ -79,6 +103,21 @@ def create_folder(folder: Union[str, Path]) -> bool:
         folder_path.mkdir()
         if is_linux():
             folder_path.chmod(
+                stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH,
+            )
+        return True
+    except Exception:
+        return False
+
+
+def rename_folder(old_folder: Union[str, Path], new_name: Union[str, Path]) -> bool:
+    old_path = Path(old_folder)
+    new_path = old_path.parent / Path(new_name)
+
+    try:
+        old_path.rename(new_path)
+        if is_linux():
+            new_path.chmod(
                 stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH,
             )
         return True
@@ -219,17 +258,24 @@ def restore_list_vars_values(obj: Any, li_vars_values: List[Tuple[str, Any]]) ->
             setattr(obj, name, value)
 
 
-def save_obj_pickle(obj: Any, li_exclude: Optional[List[str]] = None) -> bytes:
+def save_obj_dict(obj: Any, li_exclude: Optional[List[str]] = None) -> dict:
     li_vars_values = list_vars_values(obj, li_exclude)
-    dic = {var: value for var, value in li_vars_values}
-    return pickle.dumps(dic, protocol=4)
+    return {var: value for var, value in li_vars_values}
+
+
+def restore_obj_dict(obj: Any, dic: dict) -> None:
+    for k, v in dic.items():
+        if hasattr(obj, k):
+            setattr(obj, k, v)
+
+
+def save_obj_pickle(obj: Any, li_exclude: Optional[List[str]] = None) -> bytes:
+    return pickle.dumps(save_obj_dict(obj, li_exclude), protocol=4)
 
 
 def restore_obj_pickle(obj: Any, js_txt: bytes) -> None:
     dic = pickle.loads(js_txt)
-    for k, v in dic.items():
-        if hasattr(obj, k):
-            setattr(obj, k, v)
+    restore_obj_dict(obj, dic)
 
 
 def ini_dic(file: Union[str, Path]) -> dict:
@@ -255,7 +301,7 @@ def today() -> datetime.datetime:
 
 
 def huella() -> str:
-    timestamp = int(time.time() * 1000).to_bytes(6, byteorder='big')
+    timestamp = int(time.time() * 1000).to_bytes(6, byteorder="big")
     random_part = uuid.uuid4().bytes[:10]
     combined = timestamp + random_part
     return base64.urlsafe_b64encode(combined).decode().rstrip("=")
@@ -391,7 +437,6 @@ def ini2dic(file):
     dic_base = collections.OrderedDict()
 
     if os.path.isfile(file):
-
         with open(file, "rt", encoding="utf-8", errors="ignore") as f:
             for linea in f:
                 linea = linea.strip()
@@ -422,7 +467,6 @@ def ini_base2dic(file, rfind_equal=False):
     dic = {}
 
     if os.path.isfile(file):
-
         with open(file, "rt", encoding="utf-8", errors="ignore") as f:
             for linea in f:
                 linea = linea.strip()
@@ -464,7 +508,6 @@ class ListaNumerosImpresion:
             txt = txt.replace("--", "-").replace(",,", ",").replace(" ", "")
 
             for bloque in txt.split(","):
-
                 if bloque.startswith("-"):
                     num = bloque[1:]
                     if num.isdigit():
@@ -679,7 +722,7 @@ class OpenCodec:
             if best_guess is not None:
                 encoding = best_guess.encoding
             else:
-                encoding = 'utf-8'
+                encoding = "utf-8"
         if modo is None:
             modo = "rt"
         self.f = open(path, modo, encoding=encoding, errors="ignore")
@@ -697,7 +740,7 @@ def bytes_encoding(btxt: bytes) -> str:
     if best_guess is not None:
         encoding = best_guess.encoding
     else:
-        encoding = 'utf-8'
+        encoding = "utf-8"
     return encoding
 
 
@@ -827,12 +870,12 @@ def fen_fen64(fen):
 
 
 def randomize():
-    random.seed(int.from_bytes(os.urandom(4), 'little'))
+    random.seed(int.from_bytes(os.urandom(4), "little"))
 
 
 def file_crc(ruta_archivo):
     crc = 0
-    with open(ruta_archivo, 'rb') as f:
+    with open(ruta_archivo, "rb") as f:
         while True:
             chunk = f.read(4096)
             if not chunk:
@@ -927,7 +970,7 @@ class SmoothedEstimator:
     def __init__(self, total):
         self.total = total
         self.start_time = time.time()
-        self.q_est = queue.Queue(maxsize=100)
+        self.q_est = collections.deque(maxlen=100)
 
     def estimated(self, current_pos):
         if current_pos <= 0:
@@ -937,14 +980,11 @@ class SmoothedEstimator:
         dif_time = time.time() - self.start_time
         cur_est = dif_time / current_pos  # Dividir por current_pos en lugar de current_pos+1
 
-        # Manejar la cola correctamente
-        if self.q_est.full():
-            self.q_est.get()  # Eliminar el elemento más antiguo
-        self.q_est.put(cur_est)
+        # Manejar el histórico
+        self.q_est.append(cur_est)
 
-        # Calcular el promedio de la cola
-        items = list(self.q_est.queue)
-        media = sum(items) / len(items) if items else cur_est
+        # Calcular el promedio
+        media = sum(self.q_est) / len(self.q_est)
 
         return self.format_seconds(media * remaining_units)
 
@@ -955,3 +995,49 @@ class SmoothedEstimator:
         hours, rem = divmod(int(seconds), 3600)
         minutes, secs = divmod(rem, 60)
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def get_name_without_ext(ruta: Union[str, Path]) -> str:
+    """Devuelve el nombre del archivo sin la extensión."""
+    return Path(ruta).stem
+
+
+def calculate_accuracy(best_score: int, played_score: int) -> float:
+    """
+    Calcula la precisión basada en la pérdida de probabilidad de victoria.
+    Basado en el 'Accuracy' de Lichess.
+    """
+    if played_score >= best_score:
+        return 100.0
+
+    def win_percent(cp: float) -> float:
+        # Limitamos el rango para evitar overflows en math.exp
+        cp = max(min(cp, 10000), -10000)
+        return 50 + 50 * (2 / (1 + math.exp(-0.00368208 * cp)) - 1)
+
+    win_best = win_percent(best_score)
+    win_played = win_percent(played_score)
+
+    # Diferencia de probabilidad (siempre positiva por el check inicial)
+    diff = max(0.0, win_best - win_played)
+
+    accuracy = 103.1668 * math.exp(-0.04354 * diff) - 3.1669
+
+    return round(max(0.0, min(100.0, accuracy)), 2)
+
+
+def bug_path(path):
+    if not path:
+        return path
+    path_str = str(path)
+    if exist_file(path_str):
+        return path
+    if "OS\\windows" in path_str:
+        path_str = path_str.replace("OS\\windows", "OS\\win32")
+    if "FoxCub" in path_str:
+        path_str = path_str.replace("FoxCub", "eguzkilore").replace("foxcub", "eguzkilore")
+    elif "Fox" in path_str:
+        path_str = path_str.replace("Fox", "eguzki").replace("fox", "eguzki")
+    if not exist_file(path_str):
+        return path
+    return Path(path_str) if isinstance(path, Path) else path_str

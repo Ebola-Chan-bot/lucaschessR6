@@ -21,6 +21,7 @@ from Code.Base.Constantes import (
     GT_TURN_ON_LIGHTS,
     GT_VARIATIONS,
     GT_WICKER,
+    GT_GRID,
     RS_DRAW,
     RS_WIN_OPPONENT,
     RS_WIN_PLAYER,
@@ -95,9 +96,6 @@ class ControlPGN:
         starts_with_black = self.manager.game.starts_with_black
 
         if row == 0 and is_white and starts_with_black:
-            # Clicking the empty White cell in a Black-first game: show the initial position
-            self.manager.set_position(self.manager.game.first_position, variation_history="-1")
-            self.manager.refresh()
             return
 
         lj = self.manager.game.li_moves
@@ -109,7 +107,6 @@ class ControlPGN:
 
         tam_lj = len(lj)
         if tam_lj:
-
             is_last = (pos + 1) >= tam_lj
             if is_last:
                 pos = tam_lj - 1
@@ -120,10 +117,10 @@ class ControlPGN:
                 self.manager.set_position(move.position, variation_history=str(pos))
                 if self.manager.human_is_playing and self.manager.state == ST_PLAYING:
                     if self.manager.game_type in (
-                            GT_ALONE,
-                            GT_GAME,
-                            GT_VARIATIONS,
-                            GT_LEARN_PLAY,
+                        GT_ALONE,
+                        GT_GAME,
+                        GT_VARIATIONS,
+                        GT_LEARN_PLAY,
                     ):
                         side = move.position.is_white
                     else:
@@ -165,14 +162,14 @@ class ControlPGN:
         game_type = self.manager.game_type
 
         if game_type in (
-                GT_AGAINST_PGN,
-                GT_ALONE,
-                GT_GAME,
-                GT_VARIATIONS,
-                GT_ROUTES,
-                GT_TURN_ON_LIGHTS,
-                GT_NOTE_DOWN,
-                GT_AGAINST_GM,
+            GT_AGAINST_PGN,
+            GT_ALONE,
+            GT_GAME,
+            GT_VARIATIONS,
+            GT_ROUTES,
+            GT_TURN_ON_LIGHTS,
+            GT_NOTE_DOWN,
+            GT_AGAINST_GM,
         ):
             return self.manager.current_pgn()
 
@@ -204,7 +201,7 @@ class ControlPGN:
             blancas = rival
             negras = player
         hoy = Util.today()
-        resp = f'[Site "{Code.lucas_chess}"]\n'
+        resp = f'[Site "{Code.lucas_chess} {Code.VERSION}"]\n'
         # Site (lugar): el lugar donde el evento se llevo a cabo.
         # Esto debe ser en formato "Ciudad, Region PAIS", donde PAIS es el codigo del mismo
         # en tres letras de acuerdo al codigo del Comite Olimpico Internacional. Como ejemplo: "Mexico, D.F. MEX".
@@ -232,7 +229,7 @@ class ControlPGN:
             if self.manager.hints:
                 resp += f'[Hints "{self.manager.hints}"]\n'
 
-        if game_type in (GT_ELO, GT_MICELO, GT_WICKER):
+        if game_type in (GT_ELO, GT_MICELO, GT_WICKER, GT_GRID):
             resp += f'[WhiteElo "{self.manager.white_elo}"]\n'
             resp += f'[BlackElo "{self.manager.black_elo}"]\n'
 

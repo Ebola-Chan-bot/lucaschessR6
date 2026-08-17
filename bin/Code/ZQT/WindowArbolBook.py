@@ -19,8 +19,8 @@ class UnMove:
         while len(li) < 3:
             li.append("0")
         self.pgn, self.porcentaje, self.absoluto = li[:3]
-        self.porcentaje += "  " * list_moves_parent.nivel
-        self.absoluto += "  " * list_moves_parent.nivel
+        self.porcentaje += "  " * list_moves_parent.level
+        self.absoluto += "  " * list_moves_parent.level
 
         pv = self.from_sq + self.to_sq + self.promotion
 
@@ -98,12 +98,12 @@ class ListaMoves:
     def __init__(self, move_owner, book, fen):
 
         if not move_owner:
-            self.nivel = 0
+            self.level = 0
             cp = Position.Position()
             cp.read_fen(fen)
             self.gameBase = Game.Game(cp)
         else:
-            self.nivel = move_owner.list_moves_parent.nivel + 1
+            self.level = move_owner.list_moves_parent.level + 1
             self.gameBase = move_owner.game.copia()
 
         self.book = book
@@ -137,6 +137,8 @@ class TreeMoves(QtWidgets.QTreeWidget):
         self.listaMoves = owner.listaMoves
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.menu_context)
+
+        Code.configuration.set_property(self, "102")
 
         self.setHeaderLabels((_("Moves"), "", _("Games"), "", ""))
         self.setColumnHidden(3, True)
@@ -398,7 +400,7 @@ class WindowArbolBook(LCDialog.LCDialog):
             if mov:
                 li = []
                 while True:
-                    nv = mov.list_moves_parent.nivel
+                    nv = mov.list_moves_parent.level
                     li.append((mov.from_sq, mov.to_sq, mov.promotion))
                     if nv == 0:
                         break

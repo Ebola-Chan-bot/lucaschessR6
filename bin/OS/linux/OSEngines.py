@@ -201,9 +201,8 @@ def read_engines(folder_engines):
         3392,
     )
 
-    mas("foxcub", "Lucas Monge", "1.1", "", "FoxCub", 1000)
-
-    mas("fox", "Lucas Monge", "1.4", "", "Fox", 1500)
+    mas("eguzkilore", "Lucas Monge", "1.0", "", "eguzkilore", 1000)
+    mas("eguzki", "Lucas Monge", "1.0", "", "eguzki", 1500)
 
     mas(
         "fractal",
@@ -294,7 +293,7 @@ def read_engines(folder_engines):
         nodes_compatible=True,
     )
 
-    mas("irina", "Lucas Monge", "0.20", "https://github.com/lukasmonk/irina", "irina", 1500)
+    mas("irina", "Lucas Monge", "0.23", "https://github.com/lukasmonk/irina", "irina", 1600)
 
     mas("jabba", "Richard Allbert", "1.0", "https://jabbachess.blogspot.com/", "Jabba-1.0", 2078)
 
@@ -453,25 +452,13 @@ def read_engines(folder_engines):
     return dic_engines
 
 
-def dic_engines_fixed_elo(folder_engines):
-    d = read_engines(folder_engines)
-    dic = {}
-    for nm, xfrom, xto in (
-            ("stockfish", 1400, 3000),
+def li_engines_fixed_elo() -> tuple:
+    return (
+            ("stockfish", 1400, 3100),
             ("arasan", 1000, 2600),
             ("cheng", 800, 2500),
             ("greko", 1600, 2400),
             ("texel", 700, 2500),
-            ("fox", 1000, 2700),
-    ):
-        for elo in range(xfrom, xto + 100, 100):
-            cm = d[nm].clone()
-            if elo not in dic:
-                dic[elo] = []
-            cm.set_uci_option("UCI_LimitStrength", "true")
-            cm.set_uci_option("UCI_Elo", str(elo))
-            cm.name += " (%d)" % elo
-            cm.key += " (%d)" % elo
-            cm.elo = elo
-            dic[elo].append(cm)
-    return dic
+            ("eguzki", 1000, 2700),
+            ("ct800", 1000, 2500),
+    )

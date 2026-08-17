@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional, Union, List
+import textwrap
 
 import FasterCode
 
@@ -42,10 +43,9 @@ from Code.Base.Constantes import (
     OPENING,
     MIDDLEGAME,
     ENDGAME,
-    PHASE_NODEFINED,
 )
 from Code.Nags.Nags import NAG_1, NAG_2, NAG_3, NAG_4, NAG_5, NAG_6
-from Code.Openings import Opening, OpeningsStd
+from Code.Openings import OpeningsStd
 from Code.Z import Util
 
 
@@ -54,6 +54,7 @@ class Game:
     Represent a single chess game, including initial position, moves,
     PGN tags, result and termination status.
     """
+
     li_moves = None
     opening = None
     rotuloTablasRepeticion = None
@@ -118,6 +119,11 @@ class Game:
             self.del_tag("ECO")
             self.first_position = Position.Position()
             self.first_position.set_pos_initial()
+
+    def eco(self):
+        if not self.opening:
+            self.assign_opening()
+        return self.opening.eco if self.opening else ""
 
     def is_mate(self) -> bool:
         return self.termination == TERMINATION_MATE
@@ -422,37 +428,21 @@ class Game:
         return resp
 
     def pgn_base(self, movenum=None, translated: bool = False) -> str:
-        """
-        Return move text wrapped at 80 characters per line.
-        """
+        """Return move text wrapped at 80 characters per line."""
         resp = self.pgn_base_raw(movenum, translated=translated)
-        lines = []
-        total_length = len(resp)
-        pos = 0
-        while pos < total_length:
-            while resp[pos] == " ":
-                pos += 1
-            line_end = pos + 80
-            line_text = resp[pos:line_end]
-            if line_text[-1] == " ":
-                line_text = line_text[:-1]
-            elif line_end < total_length:
-                if resp[line_end] == " ":
-                    line_end += 1
-                else:
-                    while line_end > pos and resp[line_end - 1] != " ":
-                        line_end -= 1
-                    if line_end > pos:
-                        line_text = resp[pos:line_end]
-                    else:
-                        line_end = pos + 80
-            lines.append(line_text)
-            pos = line_end
-        if lines:
-            lines[-1] = lines[-1].strip()
-            return "\n".join(lines)
-        else:
+
+        if not resp:
             return ""
+
+        lines = textwrap.wrap(
+            resp,
+            width=80,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=False,
+        )
+
+        return "\n".join(lines)
 
     def pgn_translated(self, movenum=None, until_move=INFINITE) -> str:
         """
@@ -577,7 +567,7 @@ class Game:
             li.append(result)
         titulo = f"{white}-{black}"
         if li:
-            titulo += f' ({" - ".join(li)})'
+            titulo += f" ({' - '.join(li)})"
         return titulo
 
     def first_num_move(self) -> int:
@@ -690,18 +680,13 @@ class Game:
         if num_moves > 3:
             fenm2 = self.li_moves[num_moves - 1].fenm2()
             repeated_indexes = [num_moves - 1]
-            repeated_indexes.extend(
-                index for index in range(num_moves - 1) if self.li_moves[index].fenm2() == fenm2
-            )
+            repeated_indexes.extend(index for index in range(num_moves - 1) if self.li_moves[index].fenm2() == fenm2)
             if self.first_position.fenm2() == fenm2:
                 repeated_indexes.append(-1)
 
             if len(repeated_indexes) >= 3:
                 repeated_indexes.sort()
-                label = "".join(
-                    "%d," % (index / 2 + 1 if index != -1 else 0,) for index in repeated_indexes
-                )
-                label = label.strip(",")
+                label = ",".join(str(index // 2 + 1 if index != -1 else 0) for index in repeated_indexes)
                 self.rotuloTablasRepeticion = label
                 return True
         return False
@@ -727,7 +712,7 @@ class Game:
             else:
                 break
 
-        is_white = self.is_white
+        is_white = self.is_white()
 
         for mov in pv:
             from_sq = mov[:2]
@@ -749,8 +734,9 @@ class Game:
         """
         Return the position after the move at index pos, or the first position if no moves.
         """
-        num_moves = len(self.li_moves)
-        return self.li_moves[pos].position if num_moves else self.first_position
+        if 0 <= pos < len(self.li_moves):
+            return self.li_moves[pos].position
+        return self.first_position
 
     def last_fen(self) -> str:
         return self.last_position.fen()
@@ -825,7 +811,7 @@ class Game:
         pv = " ".join([move.movimiento() for move in self.li_moves[: num_move + 1]])
         return FasterCode.pv_xpv(pv)
 
-    def all_pv(self, pv_previo: str, with_variations) -> List[str]:
+    def all_pv(self, pv_previo: str, with_variations, in_opening: bool) -> List[str]:
         """
         Return a list with all principal variations (optionally including move variations).
         """
@@ -833,6 +819,9 @@ class Game:
         if pv_previo:
             pv_previo += " "
         for move in self.li_moves:
+            if in_opening:
+                if move.position_before.phase() != OPENING:
+                    break
             if with_variations != NONE and move.variations:
                 is_w = move.is_white()
                 if (
@@ -841,7 +830,7 @@ class Game:
                         or (not is_w and with_variations == ONLY_BLACK)
                 ):
                     for variation in move.variations.li_variations:
-                        li_pvc.extend(variation.all_pv(pv_previo.strip(), with_variations))
+                        li_pvc.extend(variation.all_pv(pv_previo.strip(), with_variations, in_opening))
             pv_previo += f"{move.movimiento()} "
             li_pvc.append(pv_previo.strip())
         return li_pvc
@@ -874,7 +863,6 @@ class Game:
             self._extracted_from_all_comments_(dic)
         return dic
 
-    # TODO Rename this here and in `all_comments`
     def _extracted_from_all_comments_(self, comment_map):
         """
         Merge the game first_comment into the comments dictionary for the first move.
@@ -1160,9 +1148,9 @@ class Game:
                 is_white = move.is_white()
                 pts = mrm.li_rm[pos].centipawns_abs()
                 pts0 = mrm.li_rm[0].centipawns_abs()
-                lostp_abs = pts0 - pts
 
-                porc = 100 - lostp_abs if lostp_abs < 100 else 0
+                porc = Util.calculate_accuracy(pts0, pts)
+
                 porc_t += porc
 
                 njg_t += 1
@@ -1217,38 +1205,49 @@ class Game:
     def has_themes(self) -> bool:
         return any(move.li_themes for move in self.li_moves)
 
-    def assign_isbook_phases(self) -> None:
-        ap = Opening.OpeningPol(999)
-        max_misses = 4
-        misses = 0
-
-        # 1. Detect opening-book moves
+    def assign_phases(self):
+        last_phase = 0
         for move in self.li_moves:
-            move.is_book = False
-            if ap.check_human(move.position_before.fen(), move.from_sq, move.to_sq):
-                move.is_book = True
-                misses = 0
+            phase = move.phase
+            if phase < last_phase:
+                move.set_phase(last_phase)
             else:
-                misses += 1
-                if misses >= max_misses:
-                    break
+                last_phase = phase
 
-        # 2. Assign phases
-        last_phase = PHASE_NODEFINED
-
-        for idx, move in enumerate(self.li_moves):
-            if move.is_book:
-                if last_phase > OPENING:
-                    for prev in self.li_moves[:idx]:
-                        prev.set_phase(OPENING)
-
-                move.set_phase(OPENING)
-                last_phase = OPENING
-                continue
-            last_phase = max(MIDDLEGAME, last_phase)
-            phase = move.position_before.phase()
-            last_phase = max(last_phase, phase)
-            move.set_phase(last_phase)
+    # def assign_isbook_phases(self) -> None:
+    #     for move in self.li_moves:
+    #         move.apply_phase()
+    #     ap = Opening.OpeningPol(999)
+    #     max_misses = 4
+    #     misses = 0
+    #
+    #     # 1. Detect opening-book moves
+    #     for move in self.li_moves:
+    #         move.is_book = False
+    #         if ap.check_human(move.position_before.fen(), move.from_sq, move.to_sq):
+    #             move.is_book = True
+    #             misses = 0
+    #         else:
+    #             misses += 1
+    #             if misses >= max_misses:
+    #                 break
+    #
+    #     # 2. Assign phases
+    #     last_phase = PHASE_NODEFINED
+    #
+    #     for idx, move in enumerate(self.li_moves):
+    #         if move.is_book:
+    #             if last_phase > OPENING:
+    #                 for prev in self.li_moves[:idx]:
+    #                     prev.set_phase(OPENING)
+    #
+    #             move.set_phase(OPENING)
+    #             last_phase = OPENING
+    #             continue
+    #         last_phase = max(MIDDLEGAME, last_phase)
+    #         phase = move.position_before.phase()
+    #         last_phase = max(last_phase, phase)
+    #         move.set_phase(last_phase)
 
     def calc_elo_color(self, is_white):
         nummoves = {OPENING: 0, MIDDLEGAME: 0, ENDGAME: 0}
@@ -1496,7 +1495,7 @@ class PGNtoGame:
         new_position.read_fen(FasterCode.get_fen())
 
         move: Move.Move = Move.Move(
-            self,
+            self.game,
             base_position,
             new_position,
             move_str[:2],

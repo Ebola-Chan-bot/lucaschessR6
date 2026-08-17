@@ -53,9 +53,7 @@ class WBaseSave(QtWidgets.QWidget):
 
         # Codec
         lb_codec = Controles.LB(self, f"{_('Encoding')}: ")
-        li_codecs = [k for k in set(v for k, v in encodings.aliases.aliases.items())]
-        li_codecs.sort()
-        li_codecs = [(k, k) for k in li_codecs]
+        li_codecs = [(k, k) for k in sorted(set(encodings.aliases.aliases.values()))]
         li_codecs.insert(0, (_("Same as file"), "file"))
         li_codecs.insert(0, (f"{_('By default')}: {_('UTF-8')}", "default"))
         self.cb_codecs = Controles.CB(self, li_codecs, self.codec)
@@ -89,7 +87,7 @@ class WBaseSave(QtWidgets.QWidget):
                 last_dir = ""
         if not last_dir:
             last_dir = self.configuration.paths.folder_userdata()
-        fich = SelectFiles.leeCreaFichero(self, last_dir, "pgn")
+        fich = SelectFiles.read_or_create_file(self, last_dir, "pgn")
         if fich:
             if not fich.lower().endswith(".pgn"):
                 fich += ".pgn"
@@ -152,7 +150,6 @@ class WBaseSave(QtWidgets.QWidget):
 
         resp = menu.lanza()
         if resp is not None:
-
             op, ntras = resp
             if op == 0:
                 if menu.is_left:
@@ -163,7 +160,7 @@ class WBaseSave(QtWidgets.QWidget):
                     boxrooms.delete(ntras)
 
             elif op == 1:
-                resp = SelectFiles.salvaFichero(
+                resp = SelectFiles.save_file(
                     self,
                     _("Boxrooms PGN"),
                     f"{self.configuration.save_folder()}/",
@@ -240,9 +237,7 @@ class WSave(LCDialog.LCDialog):
 
         # Codec
         lb_codec = Controles.LB(self, f"{_('Encoding')}: ")
-        li_codecs = [k for k in set(v for k, v in encodings.aliases.aliases.items())]
-        li_codecs.sort()
-        li_codecs = [(k, k) for k in li_codecs]
+        li_codecs = [(k, k) for k in sorted(set(encodings.aliases.aliases.values()))]
         li_codecs.insert(0, (_("Same as file"), "file"))
         li_codecs.insert(0, (f"{_('By default')}: {_('UTF-8')}", "default"))
         self.cb_codecs = Controles.CB(self, li_codecs, self.codec)
@@ -255,9 +250,7 @@ class WSave(LCDialog.LCDialog):
         self.chb_remove_variations = Controles.CHB(
             self, _("Remove variations"), self.remove_variations
         ).capture_changes(self.check_all)
-        self.chb_remove_nags = Controles.CHB(self, _("Remove NAGs"), self.remove_nags).capture_changes(
-            self.check_all
-        )
+        self.chb_remove_nags = Controles.CHB(self, _("Remove NAGs"), self.remove_nags).capture_changes(self.check_all)
         self.chb_seventags = Controles.CHB(
             self, _("With the seven standard labels (STR)"), self.seventags
         ).capture_changes(self.check_seventags)
@@ -302,8 +295,7 @@ class WSave(LCDialog.LCDialog):
         o_columns.nueva("VALOR", _("Value"), 420, edicion=Delegados.LineaTextoUTF8())
 
         self.grid_labels = Grid.Grid(self, o_columns, is_editable=True)
-        n = self.grid_labels.width_columns_displayables()
-        self.grid_labels.setFixedWidth(n + 20)
+        self.grid_labels.fix_min_width()
 
         # Layout
         ly = Colocacion.V().control(tb_labels).control(self.grid_labels).margen(3)
@@ -443,7 +435,7 @@ class WSave(LCDialog.LCDialog):
 
         if not last_dir:
             last_dir = self.configuration.paths.folder_userdata()
-        fich = SelectFiles.salvaFichero(self, _("File to save"), last_dir, "pgn", confirm_overwrite=False)
+        fich = SelectFiles.save_file(self, _("File to save"), last_dir, "pgn", confirm_overwrite=False)
         if fich:
             if not fich.lower().endswith(".pgn"):
                 fich += ".pgn"
@@ -506,7 +498,6 @@ class WSave(LCDialog.LCDialog):
 
         resp = menu.lanza()
         if resp is not None:
-
             op, ntras = resp
             if op == 0:
                 if menu.is_left:
@@ -517,7 +508,7 @@ class WSave(LCDialog.LCDialog):
                     boxrooms.delete(ntras)
 
             elif op == 1:
-                resp = SelectFiles.salvaFichero(
+                resp = SelectFiles.save_file(
                     self,
                     _("Boxrooms PGN"),
                     f"{self.configuration.save_folder()}/",
@@ -581,7 +572,7 @@ class WSave(LCDialog.LCDialog):
             self.history_list.insert(0, self.file)
             QTMessages.temporary_message(self.parent(), _("Saved"), 0.8)
             self.finalize()
-        except:
+        except Exception:
             QTMessages.message_error(self, _("Unable to save"))
 
     def portapapeles(self):
@@ -752,7 +743,7 @@ class FileSavePGN:
         try:
             self._file_handle = open(self.file, modo, encoding=self.codec, errors="ignore")
             return True
-        except FileNotFoundError:
+        except OSError:
             return False
 
     def write(self, pgn):

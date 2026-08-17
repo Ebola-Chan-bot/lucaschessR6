@@ -1,5 +1,7 @@
 import random
 
+from PySide6 import QtCore
+
 import Code
 from Code.Z import Adjournments, Util
 from Code.Base import Move
@@ -74,7 +76,7 @@ class ManagerLeague(Manager.Manager):
         self.manager_rival.check_engine()
         self.start_message(nomodal=Code.eboard and Util.is_linux())  # nomodal: problema con eboard
 
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def base_inicio(self, league: Leagues.League, xmatch: Leagues.Match, division: int):
 
@@ -198,8 +200,6 @@ class ManagerLeague(Manager.Manager):
             self.main_window.start_clock(self.set_clock, 1000)
         else:
             self.main_window.base.change_player_labels(bl, ng)
-
-        self.main_window.set_notify(self.mueve_rival_base)
 
         self.game.add_tag_timestart()
 
@@ -409,7 +409,7 @@ class ManagerLeague(Manager.Manager):
         self.board.set_position(self.game.last_position)
         self.pon_toolbar()
         self.main_window.show_pgn()
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
 
     def final_x(self):
         if self.state != ST_ENDGAME:
@@ -467,7 +467,7 @@ class ManagerLeague(Manager.Manager):
         si_rival = is_white == self.is_engine_side_white
 
         if si_rival:
-            self.play_rival()
+            QtCore.QTimer.singleShot(0, self.play_rival)
 
         else:
             self.play_human(is_white)
@@ -524,7 +524,7 @@ class ManagerLeague(Manager.Manager):
         if self.book:
             move_found, rm = self.select_book_move(self.book, self.book_rr, self.book_depth)
             if move_found:
-                self.rival_has_moved(rm)
+                QtCore.QTimer.singleShot(0, lambda: self.rival_has_moved(rm))
                 return
             else:
                 self.book = None
@@ -538,12 +538,11 @@ class ManagerLeague(Manager.Manager):
             seconds_black = seconds_white = 10 * 60
             seconds_move = 0
         self.manager_rival.run_engine_params.update_var_time(seconds_white, seconds_black, seconds_move)
-        self.manager_rival.play_game(self.game, self.main_window.notify)
+        rm_rival: EngineResponse.EngineResponse = self.manager_rival.play(game=self.game)
+        if rm_rival is not None:
+            QtCore.QTimer.singleShot(0, lambda: self.rival_has_moved(rm_rival))
 
-    def mueve_rival_base(self):
-        self.rival_has_moved(self.main_window.dato_notify)
-
-    def rival_has_moved(self, rm_rival):
+    def rival_has_moved(self, rm_rival: EngineResponse.EngineResponse) -> bool:
         self.rival_is_thinking = False
         time_s = self.stop_clock(False)
         self.thinking(False)
@@ -570,7 +569,7 @@ class ManagerLeague(Manager.Manager):
             self.add_move(move)
             self.move_the_pieces(move.list_piece_moves, True)
             self.beep_extended(False)
-            self.play_next_move()
+            QtCore.QTimer.singleShot(0, self.play_next_move)
             return True
 
         else:
@@ -607,7 +606,7 @@ class ManagerLeague(Manager.Manager):
         self.move_the_pieces(move.list_piece_moves, False)
         self.beep_extended(True)
 
-        self.play_next_move()
+        QtCore.QTimer.singleShot(0, self.play_next_move)
         return True
 
     def add_move(self, move):

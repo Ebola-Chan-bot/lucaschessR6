@@ -449,7 +449,7 @@ class Histogram(QtWidgets.QGraphicsView):
         # Verificar click en barras de puntos perdidos
         if self.owner.show_lost_points_value():
             for p in self.hserie.liPoints:
-                if p.rlostp and hasattr(p, 'rect_lost') and p.rect_lost.contains(ep):
+                if p.rlostp and hasattr(p, "rect_lost") and p.rect_lost.contains(ep):
                     self.dispatch(p.gridPos)
 
         # Menú contextual con click derecho
@@ -472,7 +472,7 @@ class Histogram(QtWidgets.QGraphicsView):
     def _save_to_file(self, pixmap):
         """Guarda el histograma como archivo PNG."""
         configuration = Code.configuration
-        if path := SelectFiles.salvaFichero(
+        if path := SelectFiles.save_file(
             self,
             _("File to save"),
             configuration.save_folder(),
@@ -486,7 +486,7 @@ class Histogram(QtWidgets.QGraphicsView):
         super(Histogram, self).mouseDoubleClickEvent(event)
         ep = self.mapToScene(event.pos())
         for p in self.hserie.liPoints:
-            if p.rlostp and hasattr(p, 'rect_lost') and p.rect_lost.contains(ep):
+            if p.rlostp and hasattr(p, "rect_lost") and p.rect_lost.contains(ep):
                 self.dispatch_enter(p.gridPos)
 
     def wheelEvent(self, event):
@@ -524,7 +524,7 @@ def gen_histograms(game: Game.Game):
         pts0 = mrm.li_rm[0].centipawns_abs()
 
         move.lostp_abs = lostp_abs = pts0 - pts
-        porc = LOST_POINTS_THRESHOLD - lostp_abs if lostp_abs < LOST_POINTS_THRESHOLD else 0
+        porc = Util.calculate_accuracy(pts0, pts)
         move.porcentaje = porc
 
         porc_t += porc

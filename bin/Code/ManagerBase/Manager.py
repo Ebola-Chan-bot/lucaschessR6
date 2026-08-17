@@ -1,11 +1,10 @@
-import collections
 import random
 import time
 
 import FasterCode
 
 import Code
-from Code.Base import Game, Move, Position
+from Code.Base import Game, Move
 from Code.Base.Constantes import (
     BLACK,
     COL_BLACK,
@@ -19,6 +18,7 @@ from Code.Base.Constantes import (
     GT_ELO,
     GT_MICELO,
     GT_WICKER,
+    GT_GRID,
     NO_RATING,
     RESULT_DRAW,
     RS_DRAW,
@@ -42,7 +42,6 @@ from Code.Base.Constantes import (
     TERMINATION_DRAW_AGREEMENT,
     WHITE,
 )
-from Code.Board import BoardTypes
 from Code.Databases import DBgames
 from Code.Engines import EngineResponse, EngineManagerAnalysis
 from Code.ManagerBase import (
@@ -53,16 +52,10 @@ from Code.ManagerBase import (
     ManagerNavigation,
 )
 from Code.Openings import Opening, OpeningsStd
-from Code.QT import (
-    Iconos,
-    QTDialogs,
-    QTMessages,
-    QTUtils,
-    ScreenUtils
-)
+from Code.QT import Iconos, QTDialogs, QTMessages, QTUtils
+from Code.Replay import WReplay
 from Code.Z import Adjournments, ControlPGN, TimeControl, Util, XRun
 from Code.ZQT import WindowArbolBook, WindowArbol
-from Code.Replay import WReplay
 
 
 class Manager:
@@ -150,8 +143,11 @@ class Manager:
         self.closed = False
 
         self.kibitzers_manager = self.procesador.kibitzers_manager
+        self.board.set_dispatch_changed_position(self._update_on_position_change)
 
         self.with_eboard = len(self.configuration.x_digital_board) > 0
+
+        self.capture_number = None
 
         self.with_previous_next = False
 
@@ -162,7 +158,6 @@ class Manager:
 
         self.key_crash = None
 
-        self.li_marcos_tmp = []
         self.next_test_resign = 999
 
         self.manager_menu_config = ManagerMenuConfig.ManagerMenuConfig(self)
@@ -188,7 +183,7 @@ class Manager:
 
     def new_game(self):
         self.game = Game.Game()
-        self.game.set_tag("Site", Code.lucas_chess)
+        self.game.set_tag("Site", f"{Code.lucas_chess} {Code.VERSION}")
         hoy = Util.today()
         self.game.set_tag("Date", "%d.%02d.%02d" % (hoy.year, hoy.month, hoy.day))
 
@@ -222,6 +217,8 @@ class Manager:
         if self.must_be_autosaved:
             self.autosave_now()
         self.crash_adjourn_end()
+        self.board.deactivate_space_control()
+        self.capture_number = None
 
     def crash_adjourn_end(self):
         if self.key_crash:
@@ -373,12 +370,19 @@ class Manager:
         if position.get_pz(a1h8):
             show_candidates()
 
-        if not self.configuration.x_mouse_shortcuts:
+        if not self.configuration.x_mouse_shortcuts:  # Es necesario origen y destino
+            previo_a1h8 = self.atajosRatonOrigen or self.atajosRatonDestino
+            if previo_a1h8 == a1h8:
+                self.atajosRatonOrigen = self.atajosRatonDestino = None
+                return
             if li_destinos:
                 self.atajosRatonOrigen = a1h8
-                self.atajosRatonDestino = None
-                self.board.show_selection(a1h8)
-                show_candidates()
+                if self.atajosRatonDestino and self.atajosRatonDestino in li_destinos:
+                    mueve()
+                else:
+                    self.atajosRatonDestino = None
+                    self.board.show_selection(a1h8)
+                    show_candidates()
                 return
             elif li_origenes:
                 self.atajosRatonDestino = a1h8
@@ -386,7 +390,6 @@ class Manager:
                     mueve()
                 else:
                     self.atajosRatonOrigen = None
-                    self.atajosRatonDestino = None
                     self.board.show_selection(a1h8)
                     show_candidates()
             return
@@ -420,70 +423,41 @@ class Manager:
         if len(self.game):
             move = self.game.last_jg()
             self.board.set_position(move.position_before)
+            self.check_auto_rotate()
             self.board.put_arrow_sc(move.from_sq, move.to_sq)
             QTUtils.refresh_gui()
-            time.sleep(0.6)
+            time.sleep(0.1)
 
             ant_show = self.configuration.x_show_effects
             ant_speed = self.configuration.x_pieces_speed
             self.configuration.x_show_effects = True
-            self.configuration.x_pieces_speed = 100
+            self.configuration.x_pieces_speed = 300
             self.move_the_pieces(move.list_piece_moves, True)
             self.configuration.x_show_effects = ant_show
             self.configuration.x_pieces_speed = ant_speed
 
             self.board.set_position(move.position)
+            self.check_auto_rotate()
             self.main_window.base.pgn.refresh()
             self.main_window.base.pgn.gobottom(1 if move.is_white() else 2)
             self.board.put_arrow_sc(move.from_sq, move.to_sq)
 
     def move_the_pieces(self, li_moves, is_rival=False):
         self.main_window.end_think_analysis_bar()
+
         if is_rival and self.configuration.x_show_effects:
             if self.procesador.manager is None:
                 return
+            self.board.animate_move(li_moves)
 
-            rapidez = self.configuration.pieces_speed_porc()
-            cpu = self.procesador.cpu
-            cpu.reset()
-            seconds = None
+        for movim in li_moves:
+            if movim[0] == "b":
+                self.board.remove_piece(movim[1])
+            elif movim[0] == "m":
+                self.board.move_piece(movim[1], movim[2])
+            elif movim[0] == "c":
+                self.board.change_piece(movim[1], movim[2])
 
-            # primero los movimientos
-            for movim in li_moves:
-                if movim[0] == "m":
-                    if seconds is None:
-                        from_sq, to_sq = movim[1], movim[2]
-                        dc = ord(from_sq[0]) - ord(to_sq[0])
-                        df = int(from_sq[1]) - int(to_sq[1])
-                        # Maxima distancia = 9.9 ( 9,89... sqrt(7**2+7**2)) = 4 seconds
-                        dist = (dc ** 2 + df ** 2) ** 0.5
-                        seconds = 8.0 * dist / (9.9 * rapidez)
-                    cpu.move_piece(movim[1], movim[2], seconds)
-
-            if seconds is None:
-                seconds = 1.0
-
-            # segundo los borrados
-            for movim in li_moves:
-                if movim[0] == "b":
-                    cpu.remove_piece_in_seconds(movim[1], seconds)
-
-            # tercero los cambios
-            for movim in li_moves:
-                if movim[0] == "c":
-                    cpu.change_piece(movim[1], movim[2], is_exclusive=True)
-
-            cpu.run_linear()
-
-        else:
-            for movim in li_moves:
-                if movim[0] == "b":
-                    self.board.remove_piece(movim[1])
-                elif movim[0] == "m":
-                    self.board.move_piece(movim[1], movim[2])
-                elif movim[0] == "c":
-                    self.board.change_piece(movim[1], movim[2])
-        # Aprovechamos que esta operacion se hace en cada move
         self.reset_shortcuts_mouse()
         self.board.variation_history = None
 
@@ -532,8 +506,9 @@ class Manager:
             opening = self.game.opening
             if opening:
                 nom_opening = opening.tr_name
-                if opening.eco:
-                    nom_opening += f" ({opening.eco})"
+                eco = self.game.eco()
+                if eco:
+                    nom_opening += f" ({eco})"
 
             self.check_captures()
 
@@ -551,12 +526,6 @@ class Manager:
                 else:
                     self.kibitzers_manager.stop()
         self.check_changed()
-        
-        # Actualizar overlay de espacio controlado si estamos en modo replay
-        if hasattr(self, 'xpelicula') and self.xpelicula:
-            if hasattr(self.xpelicula, 'space_number') and self.xpelicula.space_number is not None:
-                if hasattr(self.xpelicula, '_update_space_control'):
-                    self.xpelicula._update_space_control()
 
     def check_captures(self):
         if self.main_window.siCapturas and self.board.last_position is not None:
@@ -673,7 +642,7 @@ class Manager:
 
     def set_dispatcher(self, messenger):
         self.messenger = messenger
-        atajos_raton = self.atajos_raton if self.configuration.x_mouse_shortcuts else None
+        atajos_raton = self.atajos_raton if self.configuration.x_mouse_shortcuts is not None else None
         self.board.set_dispatcher(self.player_has_moved_base, atajos_raton)
 
     def put_arrow_sc(self, from_sq, to_sq, lipvvar=None):
@@ -728,7 +697,7 @@ class Manager:
             self.runSound.play_beep()
 
     def beep_zeitnot(self):
-        self.runSound.play_zeinot()
+        self.runSound.play_zeitnot()
 
     def beep_error(self):
         if self.configuration.x_sound_error:
@@ -951,12 +920,12 @@ class Manager:
         pass
 
     def replay(self):
-        if not WReplay.param_replay(self.configuration, self.main_window, self.with_previous_next):
+        params = WReplay.ParamsReplay()
+        if not params.edit(self.main_window, self.with_previous_next):
             return
 
         if self.with_previous_next:
-            dic_var = WReplay.read_params()
-            if dic_var["REPLAY_CONTINUOUS"]:
+            if params.dic_data["REPLAY_CONTINUOUS"]:
                 getattr(self, "replay_continuous")()
                 return
 
@@ -1009,86 +978,36 @@ class Manager:
 
     def do_pressed_number(self, si_activar, number):
         if number in [1, 8]:
-            if si_activar:
-                # Que move esta en el board
-                fen = self.board.fen_active()  # fen_active()
-                is_white = " w " in fen
-                if number == 1:
-                    si_mb = is_white
-                else:
-                    si_mb = not is_white
+            if not si_activar:
+                return  # Solo reaccionar al press (no al release) para toggle
+
+            if self.capture_number == number:
+                # Mismo número: apagar
+                self.capture_number = None
                 self.board.remove_arrows()
                 if self.board.arrow_sc:
-                    self.board.arrow_sc.hide()
-                li = FasterCode.get_captures(fen, si_mb)
-                for m in li:
-                    d = m.xfrom()
-                    h = m.xto()
-                    self.board.show_arrow_mov(d, h, "c")
+                    self.board.arrow_sc.show()
             else:
-                num_moves, nj, row, is_white = self.current_move_number()
-                if nj < 0:
-                    return
-                move = self.game.move(nj)
-                self.board.set_position(move.position)
-                self.board.remove_arrows()
-                self.board.put_arrow_sc(move.from_sq, move.to_sq)
-                if Code.configuration.x_show_bestmove:
-                    move = self.game.move(nj)
-                    mrm: EngineResponse.MultiEngineResponse
-                    mrm, pos = move.analysis
-                    if not move.analysis:
-                        return
-                    rm0 = mrm.best_rm_ordered()
-                    self.board.put_arrow_scvar([(rm0.from_sq, rm0.to_sq)])
+                # Nuevo número: encender/cambiar
+                self.board.deactivate_space_control()
+                self.capture_number = number
+                self._update_captures()
 
-        elif number in [2, 7]:
-            if si_activar:
-                # Que move esta en el board
-                fen = self.board.fen_active()  # fen_active()
-                cp = Position.Position()
-                cp.read_fen(fen)
-                is_white = " w " in fen
-                dic_movs_side = {
-                    is_white: cp.aura()
-                }
+    def _update_on_position_change(self):
+        self._update_captures()
 
-                fen = FasterCode.fen_other(fen)
-                cp.read_fen(fen)
-                dic_movs_side[not is_white] = cp.aura()
-
-                li_movs = dic_movs_side[number == 2]
-
-                dic_frec = collections.Counter(li_movs)
-
-                self.li_marcos_tmp = []
-                reg_marco = BoardTypes.Marco()
-                side = "W" if number == 2 else "B"
-                dic_colors = {pos: ScreenUtils.qt_int(Code.dic_colors[f"SQUARED_CONTROLLED_{side}_{pos}"])
-                              for pos in range(6)}
-
-                for c in "abcdefgh":
-                    for r in "12345678":
-                        h8 = f"{c}{r}"
-                        frec = dic_frec.get(h8, 0)
-                        if frec > 5:
-                            frec = 5
-                        color = dic_colors[frec]
-                        reg_marco.a1h8 = h8 + h8
-                        reg_marco.siMovible = True
-                        reg_marco.color = color
-                        reg_marco.colorinterior = color
-                        box = self.board.create_marco(reg_marco)
-                        box.setZValue(5)
-                        self.li_marcos_tmp.append(box)
-
-                self.board.escena.update()
-
-            else:
-                self.remove_label3()
-                for box in self.li_marcos_tmp:
-                    self.board.xremove_item(box)
-                self.li_marcos_tmp = []
+    def _update_captures(self):
+        if self.capture_number is None:
+            return
+        fen = self.board.fen_active()
+        is_white = " w " in fen
+        si_mb = is_white if self.capture_number == 1 else not is_white
+        self.board.remove_arrows()
+        if self.board.arrow_sc:
+            self.board.arrow_sc.hide()
+        li = FasterCode.get_captures(fen, si_mb)
+        for m in li:
+            self.board.show_arrow_mov(m.xfrom(), m.xto(), "c")
 
     def do_pressed_letter(self, si_activar, letra):
         num_moves, nj, row, is_white = self.current_move_number()
@@ -1105,6 +1024,7 @@ class Manager:
             if self.board.arrow_sc:
                 self.board.arrow_sc.hide()
             self.board.set_position(move.position_before)
+            self.check_auto_rotate()
 
             def show(xpos):
                 if xpos >= len(mrm.li_rm):
@@ -1127,6 +1047,7 @@ class Manager:
 
         else:
             self.board.set_position(move.position)
+            self.check_auto_rotate()
             self.board.remove_arrows()
             self.board.put_arrow_sc(move.from_sq, move.to_sq)
             if Code.configuration.x_show_bestmove:
@@ -1184,11 +1105,17 @@ class Manager:
         else:
             return None
 
+    def check_auto_rotate(self):
+        if self.auto_rotate:
+            self.board.set_side_bottom(self.board.last_position.is_white)
+
     def set_position(self, position, variation_history=None):
         self.board.set_position(position, variation_history=variation_history)
+        self.check_auto_rotate()
 
     def check_boards_setposition(self):
         self.board.set_raw_last_position(self.game.last_position)
+        self.check_auto_rotate()
 
     def control1(self):
         if self.active_play_instead_of_me():
@@ -1199,7 +1126,7 @@ class Manager:
 
     def can_be_analysed(self):
         return len(self.game) > 0 and not (
-                self.game_type in (GT_ELO, GT_MICELO, GT_WICKER) and self.is_competitive and self.state == ST_PLAYING
+                self.game_type in (GT_ELO, GT_MICELO, GT_WICKER, GT_GRID) and self.is_competitive and self.state == ST_PLAYING
         )
 
     def check_help_to_move(self):
@@ -1214,7 +1141,7 @@ class Manager:
                 self.main_window.pensando_tutor(True)
                 self.thinking(True)
                 cp = self.current_position()
-                mrm_tutor = self.manager_tutor.analiza(cp.fen())
+                mrm_tutor = self.manager_tutor.analyze_fen(cp.fen())
                 self.thinking(False)
                 self.main_window.pensando_tutor(False)
                 rm = mrm_tutor.best_rm_ordered()
@@ -1345,7 +1272,7 @@ class Manager:
                         si_ceros = False
                         break
                 if si_ceros:
-                    mrm = self.manager_tutor.analiza(self.game.last_position.fen(), None, 7)
+                    mrm = self.manager_tutor.analyze_fen(self.game.last_position.fen(), None)
                     rm = mrm.best_rm_ordered()
                     if abs(rm.centipawns_abs()) < 15:
                         si_acepta = True
@@ -1461,7 +1388,7 @@ class Manager:
         gm.set_unknown()
         gm.is_finished()
         gm.li_tags = []
-        gm.set_tag("Site", Code.lucas_chess)
+        gm.set_tag("Site", f"{Code.lucas_chess} {Code.VERSION}")
         gm.set_tag("Event", _("Play current position"))
         for previous in (
                 "Event",
@@ -1487,20 +1414,6 @@ class Manager:
         mensaje = _("Press the continue button to start.")
         self.mensaje(mensaje, delayed=nomodal)
 
-    # def player_has_moved_base(self, from_sq, to_sq, promotion=""):
-    #     if self.board.variation_history is not None:
-    #         vh = self.board.variation_history
-    #         ok_variation = vh.count("|") > 0
-    #         if not ok_variation:
-    #             if int(vh) < len(self.game) - 1:
-    #                 ok_variation = int(vh) < len(self.game) - 2
-    #                 if not ok_variation and int(vh) < len(self.game) - 1:
-    #                     row, column = self.main_window.pgn_pos_actual()
-    #                     ok_variation = column.key == "NUMBER"
-    #         if ok_variation:
-    #             return self.mueve_variation(from_sq, to_sq, promotion="")
-    #     return self.messenger(from_sq, to_sq, promotion)
-
     def player_has_moved_base(self, from_sq, to_sq, promotion=""):
         vh = self.board.variation_history
 
@@ -1518,13 +1431,12 @@ class Manager:
                 move_idx = int(vh)
                 game_len = len(self.game)
 
-                # Fix: before the first move (move_idx < 0), always a variation
+                # Es variación si el índice es menor al antepenúltimo movimiento
                 if move_idx < 0:
                     is_variation = True
-                # Es variación si el índice es menor al antepenúltimo movimiento
+                # O si es el penúltimo, pero el usuario hizo click en el número del movimiento
                 elif move_idx < game_len - 2:
                     is_variation = True
-                # O si es el penúltimo, pero el usuario hizo click en el número del movimiento
                 elif move_idx < game_len - 1:
                     __, column = self.main_window.pgn_pos_actual()
                     if self.game.last_position.is_white:

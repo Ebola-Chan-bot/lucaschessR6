@@ -102,8 +102,8 @@ class WKibLine(QtWidgets.QMainWindow):
         self.bt_continue = add_bt(_("Continue"), Iconos.Kibitzer_Play(), self.play)
         self.bt_pause = add_bt(_("Pause"), Iconos.Kibitzer_Pause(), self.pause)
         bt_side = add_bt(_("Analyze color"), Iconos.Kibitzer_Side(), self.color)
-        self.bt_top = add_bt(f'{_("Enable")}: {_("window on top")}', Iconos.Pin(), self.window_top)
-        self.bt_bottom = add_bt(f'{_("Disable")}: {_("window on top")}', Iconos.Unpin(), self.window_bottom)
+        self.bt_top = add_bt(f"{_('Enable')}: {_('window on top')}", Iconos.Pin(), self.window_top)
+        self.bt_bottom = add_bt(f"{_('Disable')}: {_('window on top')}", Iconos.Unpin(), self.window_bottom)
         bt_options = add_bt(_("Options"), Iconos.Opciones(), self.change_options)
 
         self.em = Controles.EM(self)
@@ -204,12 +204,14 @@ class WKibLine(QtWidgets.QMainWindow):
         self.cpu.check_input()
 
     def change_options(self):
+        self.pause()
         w = WindowKibitzers.WKibitzerLive(self, self.cpu.configuration, self.cpu.num_kibitzer)
-        if w.exec() and w.has_changes:
+        if w.exec():
             self.kibitzer = self.cpu.reset_kibitzer()
             self.engine_run.close()
             self.launch_engine()
             self.cpu.reprocesa()
+        self.play()
 
     def set_flags(self):
         flags = QtCore.Qt.WindowType.FramelessWindowHint
